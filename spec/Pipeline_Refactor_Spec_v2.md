@@ -1,4 +1,4 @@
-# /spec/Pipeline_Refactor_Spec v2.md
+# /spec/Pipeline_Refactor_Spec_v2.md
 
 🎯 Goal
 
@@ -196,3 +196,4 @@ Convert Scene → Beat System.
 Phase 3
 
 Add Retention Planning.
+
