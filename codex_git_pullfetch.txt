@@ -1,0 +1,32 @@
+
+
+# codex 터미널에서
+
+git remote add origin https://github.com/simonjeonsw/ai-system-spec.git
+
+git remote -v
+
+git fetch origin
+
+git log --all --name-only --format='' | grep d9XXRNC07Ic | sort -u
+git checkout origin/main -- data/d9XXRNC07Ic*
+
+
+# codex에게 물어보기
+git branch -a | rg d9XXRNC07Ic
+git log --oneline --all -- data | head
+rg --files data | rg d9XXRNC07Ic
+
+
+# data 폴더가 없다면 생성
+mkdir -p /workspace/ai-system-spec/data/
+
+# 파일들 복사
+cp data/d9XXRNC07Ic* /workspace/ai-system-spec/data/
+
+# 복사 확인
+ls -l /workspace/ai-system-spec/data/d9XXRNC07Ic*
+
+# Windows 기준
+$env:YTDLP_JS_RUNTIME="node"
+python -m lib.pipeline_runner --url https://www.youtube.com/watch?v=d9XXRNC07Ic --refresh --validate
