@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS public.retention_events (
   scoring_model_version text,
   prompt_hash text,
   scene_contract_version text,
+  event_key text,
   payload jsonb NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -31,13 +32,19 @@ ALTER TABLE IF EXISTS public.retention_events
   ADD COLUMN IF NOT EXISTS artifact_version text,
   ADD COLUMN IF NOT EXISTS scoring_model_version text,
   ADD COLUMN IF NOT EXISTS prompt_hash text,
-  ADD COLUMN IF NOT EXISTS scene_contract_version text;
+  ADD COLUMN IF NOT EXISTS scene_contract_version text,
+  ADD COLUMN IF NOT EXISTS event_key text;
 
 CREATE INDEX IF NOT EXISTS idx_retention_events_video_id_created_at
   ON public.retention_events(video_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_retention_events_join_key
   ON public.retention_events(video_id, run_id, artifact_type, artifact_version, event_type, created_at DESC);
+
+
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_retention_events_event_key
+  ON public.retention_events(event_key)
+  WHERE event_key IS NOT NULL;
 
 -- 3) Learning gate latest decisions (upsert by video_id)
 CREATE TABLE IF NOT EXISTS public.learning_gates (
@@ -83,12 +90,20 @@ CREATE TABLE IF NOT EXISTS public.learning_gate_decisions (
   policy jsonb,
   window_size integer,
   evaluated_outcomes integer,
+  decision_key text,
   payload jsonb NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE IF EXISTS public.learning_gate_decisions
+  ADD COLUMN IF NOT EXISTS decision_key text;
 
 CREATE INDEX IF NOT EXISTS idx_learning_gate_decisions_video_created_at
   ON public.learning_gate_decisions(video_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_learning_gate_decisions_join_key
   ON public.learning_gate_decisions(video_id, run_id, artifact_type, artifact_version, created_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_learning_gate_decisions_decision_key
+  ON public.learning_gate_decisions(decision_key)
+  WHERE decision_key IS NOT NULL;

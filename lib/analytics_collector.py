@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import sys
 from datetime import date, timedelta
@@ -107,7 +108,7 @@ def store_metrics_snapshot(
 
 
 
-def append_retention_outcome_event(*, video_id: str, metrics: Dict[str, Any]) -> Dict[str, Any]:
+def append_retention_outcome_event(*, video_id: str, metrics: Dict[str, Any], start_date: str, end_date: str) -> Dict[str, Any]:
     data_dir = Path(__file__).resolve().parent.parent / "data"
     path = data_dir / f"{video_id}_retention_events.json"
     payload: Dict[str, Any] = {"events": [], "schema_version": "1.0"}
@@ -139,6 +140,20 @@ def append_retention_outcome_event(*, video_id: str, metrics: Dict[str, Any]) ->
         prompt_hash=(latest_feature or {}).get("prompt_hash"),
         feature_snapshot=(latest_feature or {}).get("feature_snapshot"),
     )
+    event_key_seed = "::".join(
+        [
+            str(video_id),
+            str(event.get("run_id")),
+            str(event.get("artifact_type")),
+            str(event.get("artifact_version")),
+            str(event.get("event_type")),
+            str(event.get("event_window")),
+            str(start_date),
+            str(end_date),
+        ]
+    )
+    event["event_key"] = hashlib.sha256(event_key_seed.encode("utf-8")).hexdigest()
+
     payload.setdefault("events", [])
     payload["events"].append(event)
     payload["schema_version"] = "1.0"
@@ -148,7 +163,7 @@ def append_retention_outcome_event(*, video_id: str, metrics: Dict[str, Any]) ->
 def persist_learning_artifacts(*, video_id: str, retention_event: Dict[str, Any], learning_gate: Dict[str, Any]) -> None:
     """Persist learning artifacts to Supabase if optional tables are available."""
     try:
-        supabase.table("retention_events").insert(
+        supabase.table("retention_events").upsert(
             {
                 "video_id": video_id,
                 "run_id": retention_event.get("run_id"),
@@ -159,16 +174,30 @@ def persist_learning_artifacts(*, video_id: str, retention_event: Dict[str, Any]
                 "scoring_model_version": retention_event.get("scoring_model_version"),
                 "prompt_hash": retention_event.get("prompt_hash"),
                 "scene_contract_version": retention_event.get("scene_contract_version"),
+                "event_key": retention_event.get("event_key"),
                 "payload": retention_event,
-            }
+            },
+            on_conflict="event_key",
         ).execute()
     except Exception as exc:
         print(f"⚠️ retention_events insert skipped: {exc}", file=sys.stderr)
 
     lineage = learning_gate.get("lineage", {}) if isinstance(learning_gate, dict) else {}
+    decision_key_seed = "::".join(
+        [
+            str(video_id),
+            str(lineage.get("run_id")),
+            str(lineage.get("artifact_type")),
+            str(lineage.get("artifact_version")),
+            str(learning_gate.get("decision")),
+            str(learning_gate.get("window_size")),
+            str(learning_gate.get("evaluated_outcomes")),
+        ]
+    )
+    decision_key = hashlib.sha256(decision_key_seed.encode("utf-8")).hexdigest()
 
     try:
-        supabase.table("learning_gate_decisions").insert(
+        supabase.table("learning_gate_decisions").upsert(
             {
                 "video_id": video_id,
                 "run_id": lineage.get("run_id"),
@@ -179,8 +208,10 @@ def persist_learning_artifacts(*, video_id: str, retention_event: Dict[str, Any]
                 "policy": learning_gate.get("policy"),
                 "window_size": learning_gate.get("window_size"),
                 "evaluated_outcomes": learning_gate.get("evaluated_outcomes"),
+                "decision_key": decision_key,
                 "payload": learning_gate,
-            }
+            },
+            on_conflict="decision_key",
         ).execute()
     except Exception as exc:
         print(f"⚠️ learning_gate_decisions insert skipped: {exc}", file=sys.stderr)
@@ -220,7 +251,7 @@ def collect_metrics_for_videos(
             end_date=end_date,
             metrics=metrics,
         )
-        retention_event = append_retention_outcome_event(video_id=video_id, metrics=metrics)
+        retention_event = append_retention_outcome_event(video_id=video_id, metrics=metrics, start_date=start_date, end_date=end_date)
         learning_gate = evaluate_learning_gate(video_id=video_id)
         persist_learning_artifacts(video_id=video_id, retention_event=retention_event, learning_gate=learning_gate)
         results.append({"metrics": metrics, "snapshot": snapshot, "retention_event": retention_event, "learning_gate": learning_gate})
@@ -264,7 +295,7 @@ def main() -> int:
                 end_date=end_date,
                 metrics=metrics,
             )
-            retention_event = append_retention_outcome_event(video_id=video_id, metrics=metrics)
+            retention_event = append_retention_outcome_event(video_id=video_id, metrics=metrics, start_date=start_date, end_date=end_date)
             learning_gate = evaluate_learning_gate(video_id=video_id)
             persist_learning_artifacts(video_id=video_id, retention_event=retention_event, learning_gate=learning_gate)
             payload = {"metrics": metrics, "snapshot": snapshot, "retention_event": retention_event, "learning_gate": learning_gate}

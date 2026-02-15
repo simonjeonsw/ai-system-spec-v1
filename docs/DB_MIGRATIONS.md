@@ -10,9 +10,9 @@
   - `shadow_toggles` (jsonb)
   - `hook_seed_path`
   - `hook_refined_path`
-- `retention_events` table (append-only event store)
+- `retention_events` table (append-only event store, idempotent via `event_key`)
 - `learning_gates` table (latest decision per `video_id`)
-- `learning_gate_decisions` table (append-only decision history with lineage join keys)
+- `learning_gate_decisions` table (append-only decision history, idempotent via `decision_key`)
 
 ## Apply commands
 
@@ -41,3 +41,8 @@ psql "$SUPABASE_DB_URL" -c "\d+ public.video_uploads"
 - learning gate decision history into `public.learning_gate_decisions` (append-only)
 
 If tables are not present, collector continues non-blocking and prints warning lines.
+
+
+## Idempotency keys
+- `retention_events.event_key`: unique key for replay-safe outcome/feature writes.
+- `learning_gate_decisions.decision_key`: unique key for replay-safe decision writes.

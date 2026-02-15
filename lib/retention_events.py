@@ -23,6 +23,20 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _build_event_key(
+    *,
+    video_id: str,
+    run_id: str,
+    artifact_type: str,
+    artifact_version: str,
+    event_type: str,
+    event_window: str,
+    bucket: str,
+) -> str:
+    raw = "::".join([video_id, run_id, artifact_type, artifact_version, event_type, event_window, bucket])
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def build_feature_snapshot_event(
     *,
     video_id: str,
@@ -71,13 +85,18 @@ def build_feature_snapshot_event(
     )
     prompt_hash = hashlib.sha256(prompt_hash_raw.encode("utf-8")).hexdigest()
 
+    artifact_type = "retention_feature_events"
+    artifact_version = RETENTION_EVENT_ARTIFACT_VERSION
+    event_type = RETENTION_EVENT_TYPE_FEATURE_SNAPSHOT
+    event_window = "d_plus_3"
+
     return {
         "video_id": video_id,
         "run_id": run_id,
-        "artifact_type": "retention_feature_events",
-        "artifact_version": RETENTION_EVENT_ARTIFACT_VERSION,
-        "event_type": RETENTION_EVENT_TYPE_FEATURE_SNAPSHOT,
-        "event_window": "d_plus_3",
+        "artifact_type": artifact_type,
+        "artifact_version": artifact_version,
+        "event_type": event_type,
+        "event_window": event_window,
         "scoring_model_version": "retention_features_v1",
         "prompt_hash": prompt_hash,
         "scene_contract_version": scene_contract_version,
@@ -94,6 +113,15 @@ def build_feature_snapshot_event(
             "retention_curve_snapshots": [],
         },
         "created_at_utc": _now_iso(),
+        "event_key": _build_event_key(
+            video_id=video_id,
+            run_id=run_id,
+            artifact_type=artifact_type,
+            artifact_version=artifact_version,
+            event_type=event_type,
+            event_window=event_window,
+            bucket="feature_snapshot",
+        ),
         "schema_version": RETENTION_EVENT_ARTIFACT_VERSION,
     }
 
@@ -113,17 +141,23 @@ def build_outcome_snapshot_event(
     feature_snapshot: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     resolved_prompt_hash = prompt_hash or hashlib.sha256(f"outcome::{video_id}::{run_id}".encode("utf-8")).hexdigest()
+    resolved_artifact_type = artifact_type or "retention_feature_events"
+    resolved_artifact_version = artifact_version or RETENTION_EVENT_ARTIFACT_VERSION
+    event_type = RETENTION_EVENT_TYPE_OUTCOME_SNAPSHOT
+    event_window = "d_plus_3"
+
     return {
         "video_id": video_id,
         "run_id": run_id,
-        "artifact_type": artifact_type or "retention_feature_events",
-        "artifact_version": artifact_version or RETENTION_EVENT_ARTIFACT_VERSION,
-        "event_type": RETENTION_EVENT_TYPE_OUTCOME_SNAPSHOT,
-        "event_window": "d_plus_3",
+        "artifact_type": resolved_artifact_type,
+        "artifact_version": resolved_artifact_version,
+        "event_type": event_type,
+        "event_window": event_window,
         "scoring_model_version": scoring_model_version or "retention_features_v1",
         "prompt_hash": resolved_prompt_hash,
         "scene_contract_version": scene_contract_version,
-        "feature_snapshot": feature_snapshot or {
+        "feature_snapshot": feature_snapshot
+        or {
             "hook_type": "unknown",
             "beat_density": 0.0,
             "visual_beat_frequency": 0.0,
@@ -136,5 +170,14 @@ def build_outcome_snapshot_event(
             "retention_curve_snapshots": retention_curve_snapshots or [],
         },
         "created_at_utc": _now_iso(),
+        "event_key": _build_event_key(
+            video_id=video_id,
+            run_id=run_id,
+            artifact_type=resolved_artifact_type,
+            artifact_version=resolved_artifact_version,
+            event_type=event_type,
+            event_window=event_window,
+            bucket="outcome_snapshot",
+        ),
         "schema_version": RETENTION_EVENT_ARTIFACT_VERSION,
     }

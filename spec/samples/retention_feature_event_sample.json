@@ -12,18 +12,36 @@
     "hook_type": "curiosity",
     "beat_density": 0.5,
     "visual_beat_frequency": 0.9,
-    "energy_curve_distribution": [0.1, 0.2, 0.4, 0.3],
-    "shorts_extraction_source_beats": ["b-001", "b-002"]
+    "energy_curve_distribution": [
+      0.1,
+      0.2,
+      0.4,
+      0.3
+    ],
+    "shorts_extraction_source_beats": [
+      "b-001",
+      "b-002"
+    ]
   },
   "outcome_metrics": {
     "ctr": null,
     "avd": null,
     "retention_curve_snapshots": [
-      {"sec": 5, "retention_pct": 0.73},
-      {"sec": 30, "retention_pct": 0.62},
-      {"sec": 60, "retention_pct": 0.54}
+      {
+        "sec": 5,
+        "retention_pct": 0.73
+      },
+      {
+        "sec": 30,
+        "retention_pct": 0.62
+      },
+      {
+        "sec": 60,
+        "retention_pct": 0.54
+      }
     ]
   },
   "created_at_utc": "2026-01-01T00:00:00Z",
-  "schema_version": "1.0"
+  "schema_version": "1.0",
+  "event_key": "sample-event-key"
 }

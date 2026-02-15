@@ -83,12 +83,12 @@ Schemas define the canonical inputs and outputs for each module.
   "required": [
     "video_id", "run_id", "artifact_type", "artifact_version", "event_type",
     "event_window", "scoring_model_version", "prompt_hash", "scene_contract_version",
-    "feature_snapshot", "outcome_metrics", "created_at_utc", "schema_version"
+    "feature_snapshot", "outcome_metrics", "created_at_utc", "event_key", "schema_version"
   ]
 }
 ```
 
-## Retention Feature Event Bundle Schema (v1.0)
+## Retention Feature Event Bundle Schema (v1.1)
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
@@ -97,6 +97,8 @@ Schemas define the canonical inputs and outputs for each module.
   "required": ["events", "schema_version"]
 }
 ```
+
+- Event items now require full retention event keys (`run_id`, `artifact_type`, `artifact_version`, `event_key`, etc.).
 
 ## Learning Gate Output Schema (v1.1)
 ```json

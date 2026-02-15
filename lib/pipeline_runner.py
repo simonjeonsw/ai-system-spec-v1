@@ -1685,6 +1685,53 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
                 metrics=build_metrics(cache_hit=False),
                 run_id=_log_run_id(run_id, "ops", 1),
             )
+
+        lineage_payload = {
+            "video_id": video_id,
+            "status": "generated",
+            "pipeline_profile": profile_name,
+            "selected_hook_stage": selected_hook_stage,
+            "shadow_toggles": profile_toggles,
+            "hook_seed_path": f"data/{video_id}_hook_seed.json",
+            "hook_refined_path": f"data/{video_id}_hook_refined.json",
+        }
+        try:
+            supabase.table("video_uploads").upsert(
+                lineage_payload,
+                on_conflict="video_id",
+            ).execute()
+            emit_run_log(
+                stage="pipeline_lineage_persist",
+                status="success",
+                input_refs={"video_id": video_id, "root_run_id": run_id},
+                output_refs={
+                    "pipeline_profile": profile_name,
+                    "selected_hook_stage": selected_hook_stage,
+                },
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "pipeline_lineage_persist", 1),
+            )
+        except Exception as lineage_exc:
+            fallback_lineage = {
+                "video_id": video_id,
+                "status": "generated",
+            }
+            try:
+                supabase.table("video_uploads").upsert(
+                    fallback_lineage,
+                    on_conflict="video_id",
+                ).execute()
+            except Exception:
+                pass
+            emit_run_log(
+                stage="pipeline_lineage_persist",
+                status="warning",
+                input_refs={"video_id": video_id, "root_run_id": run_id},
+                output_refs={"note": "lineage persist degraded"},
+                error_summary=str(lineage_exc),
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "pipeline_lineage_persist", 1),
+            )
     except Exception as exc:
         _checkpoint_state()
         failure_payload = {
