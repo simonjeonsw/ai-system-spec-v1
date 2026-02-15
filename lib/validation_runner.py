@@ -38,12 +38,21 @@ VALIDATION_TARGETS = {
     "script": "script_output",
 }
 
-OPTIONAL_STAGES = {"hook", "shorts_intelligence", "retention_events"}
+OPTIONAL_STAGES = {
+    "hook",
+    "beat_graph",
+    "visual_beat_graph",
+    "shorts_intelligence",
+    "retention_events",
+    "learning_gate",
+}
 
 STAGE_FILENAMES = {
     "hook": "{video_id}_hook.json",
     "research": "{video_id}_research.json",
     "plan": "{video_id}_plan.json",
+    "beat_graph": "{video_id}_beat_graph.json",
+    "visual_beat_graph": "{video_id}_visual_beat_graph.json",
     "scenes": "{video_id}_scenes.json",
     "shorts_intelligence": "{video_id}_shorts_intelligence.json",
     "retention_events": "{video_id}_retention_events.json",
