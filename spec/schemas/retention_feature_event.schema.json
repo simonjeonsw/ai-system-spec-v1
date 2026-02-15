@@ -1,0 +1,134 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RetentionFeatureEvent",
+  "type": "object",
+  "required": [
+    "video_id",
+    "run_id",
+    "artifact_type",
+    "artifact_version",
+    "event_type",
+    "event_window",
+    "scoring_model_version",
+    "prompt_hash",
+    "scene_contract_version",
+    "feature_snapshot",
+    "outcome_metrics",
+    "created_at_utc",
+    "event_key",
+    "schema_version"
+  ],
+  "properties": {
+    "video_id": {
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "artifact_type": {
+      "type": "string"
+    },
+    "artifact_version": {
+      "type": "string"
+    },
+    "event_type": {
+      "type": "string"
+    },
+    "event_window": {
+      "type": "string"
+    },
+    "scoring_model_version": {
+      "type": "string"
+    },
+    "prompt_hash": {
+      "type": "string"
+    },
+    "scene_contract_version": {
+      "type": "string"
+    },
+    "feature_snapshot": {
+      "type": "object",
+      "required": [
+        "hook_type",
+        "beat_density",
+        "visual_beat_frequency",
+        "energy_curve_distribution",
+        "shorts_extraction_source_beats"
+      ],
+      "properties": {
+        "hook_type": {
+          "type": "string"
+        },
+        "beat_density": {
+          "type": "number"
+        },
+        "visual_beat_frequency": {
+          "type": "number"
+        },
+        "energy_curve_distribution": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "number"
+          }
+        },
+        "shorts_extraction_source_beats": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "outcome_metrics": {
+      "type": "object",
+      "required": [
+        "ctr",
+        "avd",
+        "retention_curve_snapshots"
+      ],
+      "properties": {
+        "ctr": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "avd": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "retention_curve_snapshots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "sec",
+              "retention_pct"
+            ],
+            "properties": {
+              "sec": {
+                "type": "number"
+              },
+              "retention_pct": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "created_at_utc": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "event_key": {
+      "type": "string"
+    }
+  }
+}

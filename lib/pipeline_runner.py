@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import signal
+import os
 import time
 import re
 from pathlib import Path
@@ -23,9 +24,63 @@ from .schema_validator import validate_payload
 from .validation_runner import validate_all
 from .validator import ScriptValidator
 from .ops import log_experiment
+from .hook_layer import generate_hook_seed, generate_hook_refined
+from .beat_shadow import generate_beat_graph_shadow, generate_visual_beat_graph_shadow
+from .shorts_intel import generate_shorts_intelligence_shadow
+from .retention_events import build_feature_snapshot_event
 
 
 SCENE_ENGINE_VERSION = "2.0"
+SCENE_CONTRACT_VERSION = "legacy_scene_v1"
+HOOK_SHADOW_ENABLED_ENV = "HOOK_SHADOW_ENABLED"
+BEAT_SHADOW_ENABLED_ENV = "BEAT_SHADOW_ENABLED"
+VISUAL_BEAT_SHADOW_ENABLED_ENV = "VISUAL_BEAT_SHADOW_ENABLED"
+SHORTS_INTEL_SHADOW_ENABLED_ENV = "SHORTS_INTEL_SHADOW_ENABLED"
+RETENTION_EVENTS_ENABLED_ENV = "RETENTION_EVENTS_ENABLED"
+PIPELINE_PROFILE_ENV = "PIPELINE_PROFILE"
+
+_PIPELINE_PROFILES = {
+    "core": {
+        HOOK_SHADOW_ENABLED_ENV: False,
+        BEAT_SHADOW_ENABLED_ENV: False,
+        VISUAL_BEAT_SHADOW_ENABLED_ENV: False,
+        SHORTS_INTEL_SHADOW_ENABLED_ENV: False,
+        RETENTION_EVENTS_ENABLED_ENV: False,
+    },
+    "shadow": {
+        HOOK_SHADOW_ENABLED_ENV: True,
+        BEAT_SHADOW_ENABLED_ENV: True,
+        VISUAL_BEAT_SHADOW_ENABLED_ENV: True,
+        SHORTS_INTEL_SHADOW_ENABLED_ENV: True,
+        RETENTION_EVENTS_ENABLED_ENV: False,
+    },
+    "full_shadow": {
+        HOOK_SHADOW_ENABLED_ENV: True,
+        BEAT_SHADOW_ENABLED_ENV: True,
+        VISUAL_BEAT_SHADOW_ENABLED_ENV: True,
+        SHORTS_INTEL_SHADOW_ENABLED_ENV: True,
+        RETENTION_EVENTS_ENABLED_ENV: True,
+    },
+}
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def resolve_pipeline_profile() -> tuple[str, Dict[str, bool]]:
+    requested = (os.getenv(PIPELINE_PROFILE_ENV, "core") or "core").strip().lower()
+    if requested not in _PIPELINE_PROFILES:
+        requested = "core"
+    resolved = {
+        key: _env_bool(key, default=value)
+        for key, value in _PIPELINE_PROFILES[requested].items()
+    }
+    return requested, resolved
+
 _CAMERA_ANGLES = [
     "wide shot of a bank vault",
     "close-up of a coin",
@@ -985,9 +1040,16 @@ def _run_stage(
 
 
 _STAGE_SCHEMA = {
+    "hook": "hook_output",
+    "hook_seed": "hook_output",
+    "hook_refined": "hook_output",
     "research": "research_output",
+    "beat_graph": "beat_graph_output",
+    "visual_beat_graph": "visual_beat_graph_output",
+    "shorts_intelligence": "shorts_intelligence_output",
+    "retention_events": "retention_feature_event_bundle",
     "plan": "planner_output",
-    "scenes": "scene_output",
+    "scenes": "scene_bundle",
     "script": "script_output",
     "script_long": "script_output",
     "script_shorts": "script_output",
@@ -1008,6 +1070,13 @@ def _load_stage_payload(stage: str, video_id: str) -> Optional[Dict[str, Any]]:
         schema_name = _STAGE_SCHEMA.get(stage)
         if schema_name:
             if stage == "scenes":
+                payload.setdefault("scene_contract_version", SCENE_CONTRACT_VERSION)
+                try:
+                    validate_payload(schema_name, payload)
+                except Exception:
+                    print(f"⚠️ Schema validation failed for {stage}. Regenerating.")
+                    path.unlink(missing_ok=True)
+                    return None
                 scenes = payload.get("scenes", [])
                 if not scenes:
                     print(f"⚠️ Invalid scene payload for {stage}. Regenerating.")
@@ -1015,7 +1084,7 @@ def _load_stage_payload(stage: str, video_id: str) -> Optional[Dict[str, Any]]:
                     return None
                 try:
                     for scene in scenes:
-                        validate_payload(schema_name, scene)
+                        validate_payload("scene_output", scene)
                 except Exception:
                     print(f"⚠️ Schema validation failed for {stage}. Regenerating.")
                     path.unlink(missing_ok=True)
@@ -1048,8 +1117,22 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     state: Dict[str, Any] = {}
 
     def _checkpoint_state() -> None:
+        if state.get("hook"):
+            save_json("hook", video_id, state["hook"])
+        if state.get("hook_seed"):
+            save_json("hook_seed", video_id, state["hook_seed"])
+        if state.get("hook_refined"):
+            save_json("hook_refined", video_id, state["hook_refined"])
         if state.get("research"):
             save_json("research", video_id, state["research"])
+        if state.get("beat_graph"):
+            save_json("beat_graph", video_id, state["beat_graph"])
+        if state.get("visual_beat_graph"):
+            save_json("visual_beat_graph", video_id, state["visual_beat_graph"])
+        if state.get("shorts_intelligence"):
+            save_json("shorts_intelligence", video_id, state["shorts_intelligence"])
+        if state.get("retention_events"):
+            save_json("retention_events", video_id, state["retention_events"])
         if state.get("plan"):
             save_json("plan", video_id, state["plan"])
         if state.get("scenes"):
@@ -1070,6 +1153,51 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     signal.signal(signal.SIGTERM, _handle_signal)
     try:
         script_updated = False
+        profile_name, profile_toggles = resolve_pipeline_profile()
+        print(f"🔧 Pipeline profile resolved: {profile_name} -> {json.dumps(profile_toggles, ensure_ascii=False)}")
+        emit_run_log(
+            stage="pipeline_profile",
+            status="success",
+            input_refs={"video_id": video_id, "profile": profile_name},
+            output_refs={"toggles": profile_toggles},
+            metrics=build_metrics(cache_hit=False),
+            run_id=_log_run_id(run_id, "pipeline_profile", 1),
+        )
+
+        hook_shadow_enabled = profile_toggles[HOOK_SHADOW_ENABLED_ENV]
+        selected_hook_stage = "disabled"
+        hook_seed_payload: Dict[str, Any] | None = None
+        hook_refined_payload: Dict[str, Any] | None = None
+        hook_payload: Dict[str, Any] | None = None
+        if hook_shadow_enabled:
+            cached_hook_seed = None if refresh else _load_stage_payload("hook_seed", video_id)
+            if cached_hook_seed:
+                hook_seed_payload = cached_hook_seed
+            else:
+                hook_seed_payload = generate_hook_seed(video_id)
+                save_json("hook_seed", video_id, hook_seed_payload)
+            state["hook_seed"] = hook_seed_payload
+            hook_payload = hook_seed_payload
+            state["hook"] = hook_payload
+            save_json("hook", video_id, hook_payload)
+            selected_hook_stage = "seed"
+            emit_run_log(
+                stage="hook_shadow_seed",
+                status="success" if hook_seed_payload.get("status") == "ok" else "warning",
+                input_refs={"video_id": video_id, "enabled": True, "generated_from_stage": "seed"},
+                output_refs={"status": hook_seed_payload.get("status"), "fallback_reason": hook_seed_payload.get("fallback_reason")},
+                metrics=build_metrics(cache_hit=bool(cached_hook_seed)),
+                run_id=_log_run_id(run_id, "hook_shadow_seed", 1),
+            )
+        else:
+            emit_run_log(
+                stage="hook_shadow_seed",
+                status="skipped",
+                input_refs={"video_id": video_id, "enabled": False},
+                output_refs={"note": "hook shadow disabled"},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "hook_shadow_seed", 1),
+            )
         cached_research = None if refresh else _load_stage_payload("research", video_id)
         if cached_research:
             research_payload = cached_research
@@ -1186,6 +1314,123 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             script_updated = True
         state["script_shorts"] = shorts_payload
         save_markdown("script", video_id, _render_script_markdown(script_payload, shorts_payload))
+
+        if hook_shadow_enabled:
+            cached_hook_refined = None if refresh else _load_stage_payload("hook_refined", video_id)
+            if cached_hook_refined:
+                hook_refined_payload = cached_hook_refined
+            else:
+                hook_refined_payload = generate_hook_refined(video_id, research_payload, script_payload)
+                save_json("hook_refined", video_id, hook_refined_payload)
+            state["hook_refined"] = hook_refined_payload
+            hook_payload = hook_refined_payload
+            selected_hook_stage = "refined"
+            save_json("hook", video_id, hook_payload)
+            state["hook"] = hook_payload
+            emit_run_log(
+                stage="hook_shadow_refined",
+                status="success" if hook_refined_payload.get("status") == "ok" else "warning",
+                input_refs={"video_id": video_id, "enabled": True, "generated_from_stage": "refined"},
+                output_refs={"status": hook_refined_payload.get("status"), "fallback_reason": hook_refined_payload.get("fallback_reason")},
+                metrics=build_metrics(cache_hit=bool(cached_hook_refined)),
+                run_id=_log_run_id(run_id, "hook_shadow_refined", 1),
+            )
+        else:
+            emit_run_log(
+                stage="hook_shadow_refined",
+                status="skipped",
+                input_refs={"video_id": video_id, "enabled": False},
+                output_refs={"note": "hook shadow disabled"},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "hook_shadow_refined", 1),
+            )
+        beat_shadow_enabled = profile_toggles[BEAT_SHADOW_ENABLED_ENV]
+        visual_beat_shadow_enabled = profile_toggles[VISUAL_BEAT_SHADOW_ENABLED_ENV]
+        beat_payload: Dict[str, Any] | None = None
+        visual_beat_payload: Dict[str, Any] | None = None
+        if beat_shadow_enabled:
+            cached_beat = None if refresh else _load_stage_payload("beat_graph", video_id)
+            if cached_beat:
+                beat_payload = cached_beat
+            else:
+                beat_payload = generate_beat_graph_shadow(video_id, script_payload, run_id)
+                save_json("beat_graph", video_id, beat_payload)
+            state["beat_graph"] = beat_payload
+            emit_run_log(
+                stage="beat_shadow",
+                status="success",
+                input_refs={"video_id": video_id, "enabled": True},
+                output_refs={"beats": len((beat_payload.get("beat_graph") or {}).get("beats", []))},
+                metrics=build_metrics(cache_hit=bool(cached_beat)),
+                run_id=_log_run_id(run_id, "beat_shadow", 1),
+            )
+        else:
+            emit_run_log(
+                stage="beat_shadow",
+                status="skipped",
+                input_refs={"video_id": video_id, "enabled": False},
+                output_refs={"note": "beat shadow disabled"},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "beat_shadow", 1),
+            )
+
+        if visual_beat_shadow_enabled and beat_payload:
+            cached_visual_beat = None if refresh else _load_stage_payload("visual_beat_graph", video_id)
+            if cached_visual_beat:
+                visual_beat_payload = cached_visual_beat
+            else:
+                visual_beat_payload = generate_visual_beat_graph_shadow(video_id, beat_payload, run_id)
+                save_json("visual_beat_graph", video_id, visual_beat_payload)
+            state["visual_beat_graph"] = visual_beat_payload
+            emit_run_log(
+                stage="visual_beat_shadow",
+                status="success",
+                input_refs={"video_id": video_id, "enabled": True},
+                output_refs={"visual_beats": len((visual_beat_payload.get("visual_beat_graph") or {}).get("visual_beats", []))},
+                metrics=build_metrics(cache_hit=bool(cached_visual_beat)),
+                run_id=_log_run_id(run_id, "visual_beat_shadow", 1),
+            )
+        else:
+            emit_run_log(
+                stage="visual_beat_shadow",
+                status="skipped",
+                input_refs={"video_id": video_id, "enabled": visual_beat_shadow_enabled},
+                output_refs={"note": "visual beat shadow disabled or beat shadow unavailable"},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "visual_beat_shadow", 1),
+            )
+        shorts_intel_shadow_enabled = profile_toggles[SHORTS_INTEL_SHADOW_ENABLED_ENV]
+        shorts_intel_payload: Dict[str, Any] | None = None
+        if shorts_intel_shadow_enabled and beat_payload:
+            cached_shorts_intel = None if refresh else _load_stage_payload("shorts_intelligence", video_id)
+            if cached_shorts_intel:
+                shorts_intel_payload = cached_shorts_intel
+            else:
+                shorts_intel_payload = generate_shorts_intelligence_shadow(
+                    video_id,
+                    beat_payload,
+                    visual_beat_payload,
+                    run_id,
+                )
+                save_json("shorts_intelligence", video_id, shorts_intel_payload)
+            state["shorts_intelligence"] = shorts_intel_payload
+            emit_run_log(
+                stage="shorts_intel_shadow",
+                status="success",
+                input_refs={"video_id": video_id, "enabled": True},
+                output_refs={"candidates": len((shorts_intel_payload.get("shorts_intelligence") or {}).get("candidates", []))},
+                metrics=build_metrics(cache_hit=bool(cached_shorts_intel)),
+                run_id=_log_run_id(run_id, "shorts_intel_shadow", 1),
+            )
+        else:
+            emit_run_log(
+                stage="shorts_intel_shadow",
+                status="skipped",
+                input_refs={"video_id": video_id, "enabled": shorts_intel_shadow_enabled},
+                output_refs={"note": "shorts intelligence shadow disabled or beat shadow unavailable"},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "shorts_intel_shadow", 1),
+            )
         supabase.table("video_scripts").upsert(
             {
                 "video_id": video_id,
@@ -1287,11 +1532,14 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
         else:
             scene_output = _build_scene_output_from_script(script_payload, research_payload)
             scene_output["scene_engine_version"] = SCENE_ENGINE_VERSION
+            scene_output["scene_contract_version"] = SCENE_CONTRACT_VERSION
             scene_output["style_profile"] = _load_visual_style_config().get("active_style", "isometric_3d")
             scene_output["source_script_hash"] = _scene_hash(script_payload, scene_output["style_profile"])
             scene_output = _ensure_scene_granularity(scene_output, script_payload, research_payload, min_scenes=10)
+            scene_output.setdefault("scene_contract_version", SCENE_CONTRACT_VERSION)
             save_json("scenes", video_id, scene_output)
             save_markdown("scenes", video_id, _render_scenes_markdown(scene_output))
+        scene_output.setdefault("scene_contract_version", SCENE_CONTRACT_VERSION)
         state["scenes"] = scene_output
         supabase.table("video_scenes").upsert(
             {
@@ -1316,6 +1564,38 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             )
             save_json("metadata", video_id, metadata_payload)
         state["metadata"] = metadata_payload
+
+        retention_events_enabled = profile_toggles[RETENTION_EVENTS_ENABLED_ENV]
+        if retention_events_enabled:
+            feature_event = build_feature_snapshot_event(
+                video_id=video_id,
+                run_id=run_id,
+                scene_contract_version=SCENE_CONTRACT_VERSION,
+                hook_payload=state.get("hook"),
+                beat_payload=state.get("beat_graph"),
+                visual_beat_payload=state.get("visual_beat_graph"),
+                shorts_payload=state.get("shorts_intelligence"),
+            )
+            retention_events_payload = {"events": [feature_event], "schema_version": "1.0"}
+            save_json("retention_events", video_id, retention_events_payload)
+            state["retention_events"] = retention_events_payload
+            emit_run_log(
+                stage="retention_events",
+                status="success",
+                input_refs={"video_id": video_id, "enabled": True},
+                output_refs={"events": 1, "event_type": feature_event.get("event_type")},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "retention_events", 1),
+            )
+        else:
+            emit_run_log(
+                stage="retention_events",
+                status="skipped",
+                input_refs={"video_id": video_id, "enabled": False},
+                output_refs={"note": "retention events disabled"},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "retention_events", 1),
+            )
 
         semantic_result = validator.semantic_consistency_check(
             metadata_payload=metadata_payload,
@@ -1366,6 +1646,53 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
                 metrics=build_metrics(cache_hit=False),
                 run_id=_log_run_id(run_id, "ops", 1),
             )
+
+        lineage_payload = {
+            "video_id": video_id,
+            "status": "generated",
+            "pipeline_profile": profile_name,
+            "selected_hook_stage": selected_hook_stage,
+            "shadow_toggles": profile_toggles,
+            "hook_seed_path": f"data/{video_id}_hook_seed.json",
+            "hook_refined_path": f"data/{video_id}_hook_refined.json",
+        }
+        try:
+            supabase.table("video_uploads").upsert(
+                lineage_payload,
+                on_conflict="video_id",
+            ).execute()
+            emit_run_log(
+                stage="pipeline_lineage_persist",
+                status="success",
+                input_refs={"video_id": video_id, "root_run_id": run_id},
+                output_refs={
+                    "pipeline_profile": profile_name,
+                    "selected_hook_stage": selected_hook_stage,
+                },
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "pipeline_lineage_persist", 1),
+            )
+        except Exception as lineage_exc:
+            fallback_lineage = {
+                "video_id": video_id,
+                "status": "generated",
+            }
+            try:
+                supabase.table("video_uploads").upsert(
+                    fallback_lineage,
+                    on_conflict="video_id",
+                ).execute()
+            except Exception:
+                pass
+            emit_run_log(
+                stage="pipeline_lineage_persist",
+                status="warning",
+                input_refs={"video_id": video_id, "root_run_id": run_id},
+                output_refs={"note": "lineage persist degraded"},
+                error_summary=str(lineage_exc),
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "pipeline_lineage_persist", 1),
+            )
     except Exception as exc:
         _checkpoint_state()
         failure_payload = {
@@ -1394,7 +1721,17 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     return {
         "run_id": run_id,
         "video_id": video_id,
+        "pipeline_profile": profile_name,
+        "shadow_toggles": profile_toggles,
+        "hook": state.get("hook"),
+        "hook_seed": state.get("hook_seed"),
+        "hook_refined": state.get("hook_refined"),
+        "selected_hook_stage": selected_hook_stage,
         "research": research_payload,
+        "beat_graph": state.get("beat_graph"),
+        "visual_beat_graph": state.get("visual_beat_graph"),
+        "shorts_intelligence": state.get("shorts_intelligence"),
+        "retention_events": state.get("retention_events"),
         "plan": plan_payload,
         "scenes": scene_output,
         "script_long": script_payload,
@@ -1444,14 +1781,21 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(f"✅ Pipeline completed: {result['video_id']}")
-        print("Artifacts: data/{video_id}_{research|plan|script|script_long|script_shorts|scenes|metadata}.{json|md}")
+        print("Artifacts: data/{video_id}_{hook|hook_seed|hook_refined|research|plan|script|script_long|script_shorts|scenes|metadata}.{json|md}")
     save_json("validation_report", result["video_id"], result.get("validation_report") or {"status": "n/a", "errors": [], "sentence_map": []})
     save_json("verification_report", result["video_id"], result.get("validation_report") or {"status": "n/a", "errors": [], "sentence_map": []})
     manifest_path = Path(__file__).resolve().parent.parent / "data" / f"{result['video_id']}_pipeline.json"
     manifest = {
         "video_id": result["video_id"],
         "files": {
+            "hook": f"data/{result['video_id']}_hook.json",
+            "hook_seed": f"data/{result['video_id']}_hook_seed.json",
+            "hook_refined": f"data/{result['video_id']}_hook_refined.json",
             "research": f"data/{result['video_id']}_research.json",
+            "beat_graph": f"data/{result['video_id']}_beat_graph.json",
+            "visual_beat_graph": f"data/{result['video_id']}_visual_beat_graph.json",
+            "shorts_intelligence": f"data/{result['video_id']}_shorts_intelligence.json",
+            "retention_events": f"data/{result['video_id']}_retention_events.json",
             "plan": f"data/{result['video_id']}_plan.json",
             "scenes": f"data/{result['video_id']}_scenes.json",
             "script": f"data/{result['video_id']}_script.json",

@@ -1,0 +1,22 @@
+{
+  "video_id": "d9XXRNC07Ic",
+  "run_id": "run-sample-001",
+  "artifact_version": "1.0",
+  "scoring_model_version": "visual_beat_shadow_v1",
+  "prompt_hash": "xyz",
+  "scene_contract_version": "legacy_scene_v1",
+  "visual_beat_graph": {
+    "version": "1.0",
+    "visual_beats": [
+      {
+        "visual_beat_id": "vb-001",
+        "parent_beat_id": "b-001",
+        "sequence_index": 1,
+        "visual_intensity_score": 0.72,
+        "motion_type": "camera_motion",
+        "expected_duration_seconds": 2.2
+      }
+    ]
+  },
+  "schema_version": "1.0"
+}

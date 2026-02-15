@@ -1,45 +1,76 @@
-
 1. Trend scan and topic selection
 python -m lib.trend_scout
 
 2. Viral analysis (researcher.py)
 python -m lib.researcher
-    Checkpoints:
-    1. yt-dlp successfully fetches transcript/comments.
-    2. Gemini returns analysis output.
-    3. Data is stored in Supabase research_cache.
 
 3. Planner output (planner.py)
 python -m lib.planner
 
-4. Scene builder (scene_builder.py)
-python -m lib.scene_builder
-
-5. Script drafting (scripter.py)
+4. Script drafting (scripter.py)
 python -m lib.scripter
 
-6. Metadata generation (metadata_generator.py)
-python -m lib.metadata_generator data/planner_<video_id>.json data/script_<video_id>.json
+5. Metadata generation (metadata_generator.py)
+python -m lib.metadata_generator data/<video_id>_plan.json data/<video_id>_script.json
 
-7. Schema validation (validation_runner.py)
-python -m lib.validation_runner planner spec/samples/planner_output_sample.json
+6. Schema validation (validation_runner.py)
+python -m lib.validation_runner hook spec/samples/hook_output_sample.json
 python -m lib.validation_runner research spec/samples/research_output_sample.json
-python -m lib.validation_runner scene spec/samples/scene_output_sample.json
+python -m lib.validation_runner plan spec/samples/planner_output_sample.json
+python -m lib.validation_runner beat_graph spec/samples/beat_graph_output_sample.json
+python -m lib.validation_runner visual_beat_graph spec/samples/visual_beat_graph_output_sample.json
+python -m lib.validation_runner shorts_intelligence spec/samples/shorts_intelligence_output_sample.json
+python -m lib.validation_runner retention_events spec/samples/retention_feature_event_bundle_sample.json
+python -m lib.validation_runner learning_gate spec/samples/learning_gate_output_sample.json
+python -m lib.validation_runner scenes spec/samples/scene_output_sample.json
 python -m lib.validation_runner script spec/samples/script_output_sample.json
 python -m lib.validation_runner all --url <youtube_url_or_id>
 
-8. Analytics collection (analytics_collector.py)
+7. End-to-end runner (pipeline_runner.py)
+python -m lib.pipeline_runner --url <youtube_url_or_id> --validate
+
+8. Analytics collection + outcome snapshot + learning gate
 python -m lib.analytics_collector <video_id> [start_date] [end_date]
 python -m lib.analytics_collector path/to/video_ids.txt [start_date] [end_date]
 
-9. End-to-end runner (pipeline_runner.py)
-python -m lib.pipeline_runner --url <youtube_url_or_id> --validate
-
-10. QA gate decision (qa_gate.py)
+9. QA gate decision (qa_gate.py)
 python -m lib.qa_gate spec/samples/metrics_sample.json
+
+Runtime profile (recommended)
+- PIPELINE_PROFILE=core|shadow|full_shadow
+
+Feature flags (shadow layers, override profile defaults)
+- HOOK_SHADOW_ENABLED=true|false
+- BEAT_SHADOW_ENABLED=true|false
+- VISUAL_BEAT_SHADOW_ENABLED=true|false
+- SHORTS_INTEL_SHADOW_ENABLED=true|false
+- RETENTION_EVENTS_ENABLED=true|false
 
 Environment:
 - Copy .env.example to .env and fill in API keys.
 - Do not commit .env to GitHub.
-- Each stage writes a local backup JSON to data/<stage>_<video_id>.json.
+- Each stage writes a local backup JSON to data/<video_id>_<stage>.json.
 - Outputs are upserted to Supabase for reuse and refreshes.
+
+
+Syncing changes from another window/workspace
+- Pre-flight check (run in terminal, not chat):
+  git status --short --branch
+  git log --oneline -n 3
+- Same repo + different branch: commit there, then `git cherry-pick <commit_sha>` here.
+- Different clone/container: `git push` from source, then `git fetch` + `git cherry-pick origin/<branch>` here.
+- Warning: uncommitted changes in another workspace cannot be synchronized reliably.
+
+
+10. DB migration (shadow + learning tables)
+psql "$SUPABASE_DB_URL" -f sql/2026-02-15_shadow_learning_schema.sql
+
+Verify tables
+psql "$SUPABASE_DB_URL" -c "\d+ public.retention_events"
+psql "$SUPABASE_DB_URL" -c "\d+ public.learning_gates"
+psql "$SUPABASE_DB_URL" -c "\d+ public.learning_gate_decisions"
+psql "$SUPABASE_DB_URL" -c "\d+ public.video_uploads"
+
+Verify unique indexes
+psql "$SUPABASE_DB_URL" -c "\d+ public.retention_events" | rg "uniq_retention_events_event_key"
+psql "$SUPABASE_DB_URL" -c "\d+ public.learning_gate_decisions" | rg "uniq_learning_gate_decisions_decision_key"

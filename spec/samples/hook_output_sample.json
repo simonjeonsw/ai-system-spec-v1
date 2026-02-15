@@ -1,0 +1,24 @@
+{
+  "video_id": "d9XXRNC07Ic",
+  "artifact_version": "1.1",
+  "scoring_model_version": "hook_shadow_v2",
+  "prompt_hash": "abc123",
+  "generated_from_stage": "refined",
+  "source_artifact_refs": {
+    "research": "research_payload",
+    "script_long": "script_long_payload"
+  },
+  "hook_hypothesis": {
+    "hook_id": "hk-001",
+    "hook_text": "The inflation signal most people ignore is silently draining your wealth.",
+    "hook_type": "curiosity",
+    "curiosity_gap_score": 0.78,
+    "emotional_trigger_tags": ["urgency", "curiosity"],
+    "power_keyword_tags": ["ignore", "draining"],
+    "retention_prediction_score": 0.71,
+    "confidence_score": 0.66
+  },
+  "status": "ok",
+  "fallback_reason": null,
+  "schema_version": "1.1"
+}

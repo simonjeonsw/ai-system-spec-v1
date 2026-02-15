@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BeatGraphOutput",
+  "type": "object",
+  "required": [
+    "video_id",
+    "run_id",
+    "artifact_version",
+    "scoring_model_version",
+    "prompt_hash",
+    "scene_contract_version",
+    "beat_graph",
+    "schema_version"
+  ],
+  "properties": {
+    "video_id": { "type": "string" },
+    "run_id": { "type": "string" },
+    "artifact_version": { "type": "string" },
+    "scoring_model_version": { "type": "string" },
+    "prompt_hash": { "type": "string" },
+    "scene_contract_version": { "type": "string" },
+    "beat_graph": {
+      "type": "object",
+      "required": ["version", "beats"],
+      "properties": {
+        "version": { "type": "string" },
+        "beats": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "beat_id",
+              "sequence_index",
+              "narrative_role_tag",
+              "script_span_ref",
+              "emotion_peak_score",
+              "shock_value_score",
+              "curiosity_gap_score",
+              "info_density_score",
+              "energy_curve_index",
+              "drop_risk_prediction",
+              "shorts_candidate_flag",
+              "shorts_rank_priority"
+            ],
+            "properties": {
+              "beat_id": { "type": "string" },
+              "sequence_index": { "type": "integer" },
+              "narrative_role_tag": { "type": "string" },
+              "script_span_ref": {
+                "type": "object",
+                "required": ["start_char", "end_char"],
+                "properties": {
+                  "start_char": { "type": "integer" },
+                  "end_char": { "type": "integer" }
+                }
+              },
+              "emotion_peak_score": { "type": "number", "minimum": 0, "maximum": 1 },
+              "shock_value_score": { "type": "number", "minimum": 0, "maximum": 1 },
+              "curiosity_gap_score": { "type": "number", "minimum": 0, "maximum": 1 },
+              "info_density_score": { "type": "number", "minimum": 0, "maximum": 1 },
+              "energy_curve_index": { "type": "number", "minimum": 0, "maximum": 1 },
+              "drop_risk_prediction": { "type": "number", "minimum": 0, "maximum": 1 },
+              "shorts_candidate_flag": { "type": "boolean" },
+              "shorts_rank_priority": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "schema_version": { "type": "string" }
+  }
+}
