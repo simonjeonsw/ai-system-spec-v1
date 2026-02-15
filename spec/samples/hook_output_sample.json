@@ -1,0 +1,19 @@
+{
+  "video_id": "d9XXRNC07Ic",
+  "artifact_version": "1.0",
+  "scoring_model_version": "hook_shadow_v1",
+  "prompt_hash": "abc123",
+  "hook_hypothesis": {
+    "hook_id": "hk-001",
+    "hook_text": "What everyone misses about inflation could cost you more than you think.",
+    "hook_type": "curiosity",
+    "curiosity_gap_score": 0.78,
+    "emotional_trigger_tags": ["urgency", "curiosity"],
+    "power_keyword_tags": ["misses", "cost"],
+    "retention_prediction_score": 0.71,
+    "confidence_score": 0.66
+  },
+  "status": "ok",
+  "fallback_reason": null,
+  "schema_version": "1.0"
+}
