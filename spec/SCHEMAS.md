@@ -57,6 +57,19 @@ Schemas define the canonical inputs and outputs for each module.
 }
 ```
 
+## Shorts Intelligence Output Schema (v1.0)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ShortsIntelligenceOutput",
+  "type": "object",
+  "required": [
+    "video_id", "run_id", "artifact_version", "scoring_model_version",
+    "prompt_hash", "scene_contract_version", "shorts_intelligence", "schema_version"
+  ]
+}
+```
+
 ## Planner Output Schema (v1.0)
 ```json
 {

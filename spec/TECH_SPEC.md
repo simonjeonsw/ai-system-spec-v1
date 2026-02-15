@@ -51,6 +51,14 @@ Beat and Visual Beat generation can run in shadow mode without changing legacy s
 - Beat artifacts must include `run_id`, `artifact_version`, `scoring_model_version`, `prompt_hash`, and `scene_contract_version`.
 - Visual Beat artifacts must preserve `parent_beat_id` lineage.
 
+## Shorts Intelligence Shadow Layer (Non-Blocking)
+Shorts candidate ranking can run from Beat/Visual Beat artifacts in shadow mode while keeping legacy shorts scripting unchanged.
+
+**Rules**
+- Must be feature-flagged and non-blocking.
+- Must preserve full feature vectors per candidate (not score-only storage).
+- Must include `run_id`, `artifact_version`, `scoring_model_version`, `prompt_hash`, and `scene_contract_version`.
+
 ## Scene Structuring Spec
 Scene structuring converts research output into ordered, self-contained scenes that can be handed off to Script and Visual agents without interpretation.
 

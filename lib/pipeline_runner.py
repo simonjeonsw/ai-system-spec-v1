@@ -26,6 +26,7 @@ from .validator import ScriptValidator
 from .ops import log_experiment
 from .hook_layer import generate_hook_shadow
 from .beat_shadow import generate_beat_graph_shadow, generate_visual_beat_graph_shadow
+from .shorts_intel import generate_shorts_intelligence_shadow
 
 
 SCENE_ENGINE_VERSION = "2.0"
@@ -33,6 +34,7 @@ SCENE_CONTRACT_VERSION = "legacy_scene_v1"
 HOOK_SHADOW_ENABLED_ENV = "HOOK_SHADOW_ENABLED"
 BEAT_SHADOW_ENABLED_ENV = "BEAT_SHADOW_ENABLED"
 VISUAL_BEAT_SHADOW_ENABLED_ENV = "VISUAL_BEAT_SHADOW_ENABLED"
+SHORTS_INTEL_SHADOW_ENABLED_ENV = "SHORTS_INTEL_SHADOW_ENABLED"
 _CAMERA_ANGLES = [
     "wide shot of a bank vault",
     "close-up of a coin",
@@ -996,6 +998,7 @@ _STAGE_SCHEMA = {
     "research": "research_output",
     "beat_graph": "beat_graph_output",
     "visual_beat_graph": "visual_beat_graph_output",
+    "shorts_intelligence": "shorts_intelligence_output",
     "plan": "planner_output",
     "scenes": "scene_bundle",
     "script": "script_output",
@@ -1073,6 +1076,8 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             save_json("beat_graph", video_id, state["beat_graph"])
         if state.get("visual_beat_graph"):
             save_json("visual_beat_graph", video_id, state["visual_beat_graph"])
+        if state.get("shorts_intelligence"):
+            save_json("shorts_intelligence", video_id, state["shorts_intelligence"])
         if state.get("plan"):
             save_json("plan", video_id, state["plan"])
         if state.get("scenes"):
@@ -1291,6 +1296,38 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
                 metrics=build_metrics(cache_hit=False),
                 run_id=_log_run_id(run_id, "visual_beat_shadow", 1),
             )
+        shorts_intel_shadow_enabled = os.getenv(SHORTS_INTEL_SHADOW_ENABLED_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
+        shorts_intel_payload: Dict[str, Any] | None = None
+        if shorts_intel_shadow_enabled and beat_payload:
+            cached_shorts_intel = None if refresh else _load_stage_payload("shorts_intelligence", video_id)
+            if cached_shorts_intel:
+                shorts_intel_payload = cached_shorts_intel
+            else:
+                shorts_intel_payload = generate_shorts_intelligence_shadow(
+                    video_id,
+                    beat_payload,
+                    visual_beat_payload,
+                    run_id,
+                )
+                save_json("shorts_intelligence", video_id, shorts_intel_payload)
+            state["shorts_intelligence"] = shorts_intel_payload
+            emit_run_log(
+                stage="shorts_intel_shadow",
+                status="success",
+                input_refs={"video_id": video_id, "enabled": True},
+                output_refs={"candidates": len((shorts_intel_payload.get("shorts_intelligence") or {}).get("candidates", []))},
+                metrics=build_metrics(cache_hit=bool(cached_shorts_intel)),
+                run_id=_log_run_id(run_id, "shorts_intel_shadow", 1),
+            )
+        else:
+            emit_run_log(
+                stage="shorts_intel_shadow",
+                status="skipped",
+                input_refs={"video_id": video_id, "enabled": shorts_intel_shadow_enabled},
+                output_refs={"note": "shorts intelligence shadow disabled or beat shadow unavailable"},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "shorts_intel_shadow", 1),
+            )
         supabase.table("video_scripts").upsert(
             {
                 "video_id": video_id,
@@ -1506,6 +1543,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
         "research": research_payload,
         "beat_graph": state.get("beat_graph"),
         "visual_beat_graph": state.get("visual_beat_graph"),
+        "shorts_intelligence": state.get("shorts_intelligence"),
         "plan": plan_payload,
         "scenes": scene_output,
         "script_long": script_payload,
@@ -1566,6 +1604,7 @@ def main() -> int:
             "research": f"data/{result['video_id']}_research.json",
             "beat_graph": f"data/{result['video_id']}_beat_graph.json",
             "visual_beat_graph": f"data/{result['video_id']}_visual_beat_graph.json",
+            "shorts_intelligence": f"data/{result['video_id']}_shorts_intelligence.json",
             "plan": f"data/{result['video_id']}_plan.json",
             "scenes": f"data/{result['video_id']}_scenes.json",
             "script": f"data/{result['video_id']}_script.json",
