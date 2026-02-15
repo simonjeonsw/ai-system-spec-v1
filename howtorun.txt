@@ -66,3 +66,12 @@ Syncing changes from another window/workspace
 - Same repo + different branch: commit there, then `git cherry-pick <commit_sha>` here.
 - Different clone/container: `git push` from source, then `git fetch` + `git cherry-pick origin/<branch>` here.
 - Warning: uncommitted changes in another workspace cannot be synchronized reliably.
+
+
+10. DB migration (shadow + learning tables)
+psql "$SUPABASE_DB_URL" -f sql/2026-02-15_shadow_learning_schema.sql
+
+Verify tables
+psql "$SUPABASE_DB_URL" -c "\d+ public.retention_events"
+psql "$SUPABASE_DB_URL" -c "\d+ public.learning_gates"
+psql "$SUPABASE_DB_URL" -c "\d+ public.video_uploads"

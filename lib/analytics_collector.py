@@ -131,6 +131,36 @@ def append_retention_outcome_event(*, video_id: str, metrics: Dict[str, Any]) ->
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return event
 
+def persist_learning_artifacts(*, video_id: str, retention_event: Dict[str, Any], learning_gate: Dict[str, Any]) -> None:
+    """Persist learning artifacts to Supabase if optional tables are available."""
+    try:
+        supabase.table("retention_events").insert(
+            {
+                "video_id": video_id,
+                "event_type": retention_event.get("event_type"),
+                "event_window": retention_event.get("event_window"),
+                "payload": retention_event,
+            }
+        ).execute()
+    except Exception as exc:
+        print(f"⚠️ retention_events insert skipped: {exc}", file=sys.stderr)
+
+    try:
+        supabase.table("learning_gates").upsert(
+            {
+                "video_id": video_id,
+                "decision": learning_gate.get("decision"),
+                "action": learning_gate.get("action"),
+                "policy": learning_gate.get("policy"),
+                "window_size": learning_gate.get("window_size"),
+                "payload": learning_gate,
+            },
+            on_conflict="video_id",
+        ).execute()
+    except Exception as exc:
+        print(f"⚠️ learning_gates upsert skipped: {exc}", file=sys.stderr)
+
+
 def collect_metrics_for_videos(
     *,
     video_ids: Iterable[str],
@@ -152,6 +182,7 @@ def collect_metrics_for_videos(
         )
         retention_event = append_retention_outcome_event(video_id=video_id, metrics=metrics)
         learning_gate = evaluate_learning_gate(video_id=video_id)
+        persist_learning_artifacts(video_id=video_id, retention_event=retention_event, learning_gate=learning_gate)
         results.append({"metrics": metrics, "snapshot": snapshot, "retention_event": retention_event, "learning_gate": learning_gate})
     return {"start_date": start_date, "end_date": end_date, "results": results}
 
@@ -195,6 +226,7 @@ def main() -> int:
             )
             retention_event = append_retention_outcome_event(video_id=video_id, metrics=metrics)
             learning_gate = evaluate_learning_gate(video_id=video_id)
+            persist_learning_artifacts(video_id=video_id, retention_event=retention_event, learning_gate=learning_gate)
             payload = {"metrics": metrics, "snapshot": snapshot, "retention_event": retention_event, "learning_gate": learning_gate}
             output_refs = {"metrics": metrics}
         emit_run_log(
