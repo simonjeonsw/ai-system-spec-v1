@@ -1,0 +1,30 @@
+{
+  "events": [
+    {
+      "video_id": "d9XXRNC07Ic",
+      "run_id": "run-sample-001",
+      "artifact_type": "retention_feature_events",
+      "artifact_version": "1.0",
+      "event_type": "feature_snapshot",
+      "event_window": "d_plus_3",
+      "scoring_model_version": "retention_features_v1",
+      "prompt_hash": "abc123",
+      "scene_contract_version": "legacy_scene_v1",
+      "feature_snapshot": {
+        "hook_type": "curiosity",
+        "beat_density": 0.5,
+        "visual_beat_frequency": 0.9,
+        "energy_curve_distribution": [0.1, 0.2, 0.4, 0.3],
+        "shorts_extraction_source_beats": ["b-001"]
+      },
+      "outcome_metrics": {
+        "ctr": null,
+        "avd": null,
+        "retention_curve_snapshots": []
+      },
+      "created_at_utc": "2026-01-01T00:00:00Z",
+      "schema_version": "1.0"
+    }
+  ],
+  "schema_version": "1.0"
+}
