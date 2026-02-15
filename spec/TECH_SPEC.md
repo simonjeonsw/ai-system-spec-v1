@@ -34,6 +34,23 @@
 - Route requests in this priority order: cache → free tier API → local model
 - Log: cache_hit_rate, provider_usage, 429_rate, fallback_rate per day
 
+
+## Hook Shadow Layer (Non-Blocking)
+A pre-research hook layer can run in shadow mode for retention experiments.
+
+**Rules**
+- Hook generation must be feature-flagged and non-blocking.
+- If hook generation fails, the pipeline continues with legacy Research flow.
+- Hook artifacts must include `artifact_version`, `scoring_model_version`, `prompt_hash`, and `status`.
+
+## Beat / Visual Beat Shadow Layers (Non-Blocking)
+Beat and Visual Beat generation can run in shadow mode without changing legacy scene outputs.
+
+**Rules**
+- Both layers must be feature-flagged and non-blocking.
+- Beat artifacts must include `run_id`, `artifact_version`, `scoring_model_version`, `prompt_hash`, and `scene_contract_version`.
+- Visual Beat artifacts must preserve `parent_beat_id` lineage.
+
 ## Scene Structuring Spec
 Scene structuring converts research output into ordered, self-contained scenes that can be handed off to Script and Visual agents without interpretation.
 
@@ -47,6 +64,7 @@ Scene structuring converts research output into ordered, self-contained scenes t
   - `visual_prompt` (string): Visual guidance for the scene.
   - `narration_prompt` (string): Narration guidance for the scene.
   - `transition_note` (string): How this scene connects to the next.
+  - `scene_contract_version` (string, bundle-level): Frozen legacy envelope contract identifier (e.g., `legacy_scene_v1`).
 - **Optional fields**
   - `start_time` (string or number): Start timestamp (e.g., `"00:00:12"` or `12.0` seconds).
   - `end_time` (string or number): End timestamp (e.g., `"00:00:32"` or `32.0` seconds).
@@ -60,6 +78,7 @@ Scene structuring converts research output into ordered, self-contained scenes t
 - Claims must have at least one evidence source and a source_refs entry.
 - Every evidence_sources entry must appear in source_refs.sources.
 - Transitions must be explicit and explainable in one sentence.
+- Legacy scene envelope consumers must treat `scene_contract_version` as the compatibility key.
 
 **Minimal example**
 ```json

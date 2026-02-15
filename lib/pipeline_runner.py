@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import signal
+import os
 import time
 import re
 from pathlib import Path
@@ -23,9 +24,15 @@ from .schema_validator import validate_payload
 from .validation_runner import validate_all
 from .validator import ScriptValidator
 from .ops import log_experiment
+from .hook_layer import generate_hook_shadow
+from .beat_shadow import generate_beat_graph_shadow, generate_visual_beat_graph_shadow
 
 
 SCENE_ENGINE_VERSION = "2.0"
+SCENE_CONTRACT_VERSION = "legacy_scene_v1"
+HOOK_SHADOW_ENABLED_ENV = "HOOK_SHADOW_ENABLED"
+BEAT_SHADOW_ENABLED_ENV = "BEAT_SHADOW_ENABLED"
+VISUAL_BEAT_SHADOW_ENABLED_ENV = "VISUAL_BEAT_SHADOW_ENABLED"
 _CAMERA_ANGLES = [
     "wide shot of a bank vault",
     "close-up of a coin",
@@ -985,9 +992,12 @@ def _run_stage(
 
 
 _STAGE_SCHEMA = {
+    "hook": "hook_output",
     "research": "research_output",
+    "beat_graph": "beat_graph_output",
+    "visual_beat_graph": "visual_beat_graph_output",
     "plan": "planner_output",
-    "scenes": "scene_output",
+    "scenes": "scene_bundle",
     "script": "script_output",
     "script_long": "script_output",
     "script_shorts": "script_output",
@@ -1008,6 +1018,13 @@ def _load_stage_payload(stage: str, video_id: str) -> Optional[Dict[str, Any]]:
         schema_name = _STAGE_SCHEMA.get(stage)
         if schema_name:
             if stage == "scenes":
+                payload.setdefault("scene_contract_version", SCENE_CONTRACT_VERSION)
+                try:
+                    validate_payload(schema_name, payload)
+                except Exception:
+                    print(f"⚠️ Schema validation failed for {stage}. Regenerating.")
+                    path.unlink(missing_ok=True)
+                    return None
                 scenes = payload.get("scenes", [])
                 if not scenes:
                     print(f"⚠️ Invalid scene payload for {stage}. Regenerating.")
@@ -1015,7 +1032,7 @@ def _load_stage_payload(stage: str, video_id: str) -> Optional[Dict[str, Any]]:
                     return None
                 try:
                     for scene in scenes:
-                        validate_payload(schema_name, scene)
+                        validate_payload("scene_output", scene)
                 except Exception:
                     print(f"⚠️ Schema validation failed for {stage}. Regenerating.")
                     path.unlink(missing_ok=True)
@@ -1048,8 +1065,14 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     state: Dict[str, Any] = {}
 
     def _checkpoint_state() -> None:
+        if state.get("hook"):
+            save_json("hook", video_id, state["hook"])
         if state.get("research"):
             save_json("research", video_id, state["research"])
+        if state.get("beat_graph"):
+            save_json("beat_graph", video_id, state["beat_graph"])
+        if state.get("visual_beat_graph"):
+            save_json("visual_beat_graph", video_id, state["visual_beat_graph"])
         if state.get("plan"):
             save_json("plan", video_id, state["plan"])
         if state.get("scenes"):
@@ -1070,6 +1093,33 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     signal.signal(signal.SIGTERM, _handle_signal)
     try:
         script_updated = False
+        hook_shadow_enabled = os.getenv(HOOK_SHADOW_ENABLED_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
+        hook_payload: Dict[str, Any] | None = None
+        if hook_shadow_enabled:
+            cached_hook = None if refresh else _load_stage_payload("hook", video_id)
+            if cached_hook:
+                hook_payload = cached_hook
+            else:
+                hook_payload = generate_hook_shadow(video_id)
+                save_json("hook", video_id, hook_payload)
+            state["hook"] = hook_payload
+            emit_run_log(
+                stage="hook_shadow",
+                status="success" if hook_payload.get("status") == "ok" else "warning",
+                input_refs={"video_id": video_id, "enabled": True},
+                output_refs={"status": hook_payload.get("status"), "fallback_reason": hook_payload.get("fallback_reason")},
+                metrics=build_metrics(cache_hit=bool(cached_hook)),
+                run_id=_log_run_id(run_id, "hook_shadow", 1),
+            )
+        else:
+            emit_run_log(
+                stage="hook_shadow",
+                status="skipped",
+                input_refs={"video_id": video_id, "enabled": False},
+                output_refs={"note": "hook shadow disabled"},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "hook_shadow", 1),
+            )
         cached_research = None if refresh else _load_stage_payload("research", video_id)
         if cached_research:
             research_payload = cached_research
@@ -1186,6 +1236,61 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             script_updated = True
         state["script_shorts"] = shorts_payload
         save_markdown("script", video_id, _render_script_markdown(script_payload, shorts_payload))
+        beat_shadow_enabled = os.getenv(BEAT_SHADOW_ENABLED_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
+        visual_beat_shadow_enabled = os.getenv(VISUAL_BEAT_SHADOW_ENABLED_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
+        beat_payload: Dict[str, Any] | None = None
+        visual_beat_payload: Dict[str, Any] | None = None
+        if beat_shadow_enabled:
+            cached_beat = None if refresh else _load_stage_payload("beat_graph", video_id)
+            if cached_beat:
+                beat_payload = cached_beat
+            else:
+                beat_payload = generate_beat_graph_shadow(video_id, script_payload, run_id)
+                save_json("beat_graph", video_id, beat_payload)
+            state["beat_graph"] = beat_payload
+            emit_run_log(
+                stage="beat_shadow",
+                status="success",
+                input_refs={"video_id": video_id, "enabled": True},
+                output_refs={"beats": len((beat_payload.get("beat_graph") or {}).get("beats", []))},
+                metrics=build_metrics(cache_hit=bool(cached_beat)),
+                run_id=_log_run_id(run_id, "beat_shadow", 1),
+            )
+        else:
+            emit_run_log(
+                stage="beat_shadow",
+                status="skipped",
+                input_refs={"video_id": video_id, "enabled": False},
+                output_refs={"note": "beat shadow disabled"},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "beat_shadow", 1),
+            )
+
+        if visual_beat_shadow_enabled and beat_payload:
+            cached_visual_beat = None if refresh else _load_stage_payload("visual_beat_graph", video_id)
+            if cached_visual_beat:
+                visual_beat_payload = cached_visual_beat
+            else:
+                visual_beat_payload = generate_visual_beat_graph_shadow(video_id, beat_payload, run_id)
+                save_json("visual_beat_graph", video_id, visual_beat_payload)
+            state["visual_beat_graph"] = visual_beat_payload
+            emit_run_log(
+                stage="visual_beat_shadow",
+                status="success",
+                input_refs={"video_id": video_id, "enabled": True},
+                output_refs={"visual_beats": len((visual_beat_payload.get("visual_beat_graph") or {}).get("visual_beats", []))},
+                metrics=build_metrics(cache_hit=bool(cached_visual_beat)),
+                run_id=_log_run_id(run_id, "visual_beat_shadow", 1),
+            )
+        else:
+            emit_run_log(
+                stage="visual_beat_shadow",
+                status="skipped",
+                input_refs={"video_id": video_id, "enabled": visual_beat_shadow_enabled},
+                output_refs={"note": "visual beat shadow disabled or beat shadow unavailable"},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "visual_beat_shadow", 1),
+            )
         supabase.table("video_scripts").upsert(
             {
                 "video_id": video_id,
@@ -1287,11 +1392,14 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
         else:
             scene_output = _build_scene_output_from_script(script_payload, research_payload)
             scene_output["scene_engine_version"] = SCENE_ENGINE_VERSION
+            scene_output["scene_contract_version"] = SCENE_CONTRACT_VERSION
             scene_output["style_profile"] = _load_visual_style_config().get("active_style", "isometric_3d")
             scene_output["source_script_hash"] = _scene_hash(script_payload, scene_output["style_profile"])
             scene_output = _ensure_scene_granularity(scene_output, script_payload, research_payload, min_scenes=10)
+            scene_output.setdefault("scene_contract_version", SCENE_CONTRACT_VERSION)
             save_json("scenes", video_id, scene_output)
             save_markdown("scenes", video_id, _render_scenes_markdown(scene_output))
+        scene_output.setdefault("scene_contract_version", SCENE_CONTRACT_VERSION)
         state["scenes"] = scene_output
         supabase.table("video_scenes").upsert(
             {
@@ -1394,7 +1502,10 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     return {
         "run_id": run_id,
         "video_id": video_id,
+        "hook": state.get("hook"),
         "research": research_payload,
+        "beat_graph": state.get("beat_graph"),
+        "visual_beat_graph": state.get("visual_beat_graph"),
         "plan": plan_payload,
         "scenes": scene_output,
         "script_long": script_payload,
@@ -1451,7 +1562,10 @@ def main() -> int:
     manifest = {
         "video_id": result["video_id"],
         "files": {
+            "hook": f"data/{result['video_id']}_hook.json",
             "research": f"data/{result['video_id']}_research.json",
+            "beat_graph": f"data/{result['video_id']}_beat_graph.json",
+            "visual_beat_graph": f"data/{result['video_id']}_visual_beat_graph.json",
             "plan": f"data/{result['video_id']}_plan.json",
             "scenes": f"data/{result['video_id']}_scenes.json",
             "script": f"data/{result['video_id']}_script.json",
