@@ -72,13 +72,21 @@ python -m lib.pipeline_runner --url <youtube_url_or_id> --validate
 python -m lib.analytics_collector <video_id> [start_date] [end_date]
 python -m lib.analytics_collector path/to/video_ids.txt [start_date] [end_date]
 
-# Optional shadow flags
+# Optional profile + shadow flags
+# PIPELINE_PROFILE=core|shadow|full_shadow
 # HOOK_SHADOW_ENABLED=true
 # BEAT_SHADOW_ENABLED=true
 # VISUAL_BEAT_SHADOW_ENABLED=true
 # SHORTS_INTEL_SHADOW_ENABLED=true
 # RETENTION_EVENTS_ENABLED=true
 ```
+
+
+Profile presets (resolved with precedence: explicit env var > profile default > hardcoded false):
+- `PIPELINE_PROFILE=core`: all optional shadows/events default to `false`.
+- `PIPELINE_PROFILE=shadow`: enables hook + beat shadow by default.
+- `PIPELINE_PROFILE=full_shadow`: enables all shadow layers + retention events by default.
+- Unknown or unset `PIPELINE_PROFILE`: no profile defaults are applied, so each toggle falls back to `false` unless explicitly set.
 
 ### Environment Setup
 - Copy `.env.example` to `.env` and populate API keys.

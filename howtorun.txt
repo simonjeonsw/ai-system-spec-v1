@@ -37,11 +37,18 @@ python -m lib.analytics_collector path/to/video_ids.txt [start_date] [end_date]
 python -m lib.qa_gate spec/samples/metrics_sample.json
 
 Feature flags (shadow layers)
+- PIPELINE_PROFILE=core|shadow|full_shadow
 - HOOK_SHADOW_ENABLED=true|false
 - BEAT_SHADOW_ENABLED=true|false
 - VISUAL_BEAT_SHADOW_ENABLED=true|false
 - SHORTS_INTEL_SHADOW_ENABLED=true|false
 - RETENTION_EVENTS_ENABLED=true|false
+
+Profile behavior (precedence: explicit env var > profile default > hardcoded false)
+- core: all optional layers disabled by default.
+- shadow: hook + beat shadow enabled by default.
+- full_shadow: all optional layers enabled by default.
+- unknown/unset profile: no defaults applied; each flag falls back to false unless explicitly set.
 
 Environment:
 - Copy .env.example to .env and fill in API keys.
