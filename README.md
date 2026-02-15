@@ -45,26 +45,39 @@ This is an operating system for an AI-driven media company.
 /mcp
   mcp_config.md
 
-## Execution Model
-Planner
+## Execution Model (Current Runtime)
+Hook Shadow (optional, non-blocking)
  → Research
- → Script (future)
- → Visual (future)
- → QA / Evaluator
- → Ops (future)
+ → Plan
+ → Script (long + shorts)
+ → Beat Shadow (optional)
+ → Visual Beat Shadow (optional)
+ → Shorts Intelligence Shadow (optional)
+ → Scene Assembly (legacy envelope preserved)
+ → Metadata
+ → Validate
+ → Retention Events Shadow (optional)
+ → Analytics Collector (outcome snapshots)
+ → Learning Gate
 
 ## CLI Usage (Current)
 ```bash
 python -m lib.trend_scout
 python -m lib.researcher
 python -m lib.planner
-python -m lib.scene_builder
 python -m lib.scripter
-python -m lib.metadata_generator data/planner_<video_id>.json data/script_<video_id>.json
+python -m lib.metadata_generator data/<video_id>_plan.json data/<video_id>_script.json
 python -m lib.validation_runner all --url <youtube_url_or_id>
+python -m lib.pipeline_runner --url <youtube_url_or_id> --validate
 python -m lib.analytics_collector <video_id> [start_date] [end_date]
 python -m lib.analytics_collector path/to/video_ids.txt [start_date] [end_date]
-python -m lib.pipeline_runner --url <youtube_url_or_id> --validate
+
+# Optional shadow flags
+# HOOK_SHADOW_ENABLED=true
+# BEAT_SHADOW_ENABLED=true
+# VISUAL_BEAT_SHADOW_ENABLED=true
+# SHORTS_INTEL_SHADOW_ENABLED=true
+# RETENTION_EVENTS_ENABLED=true
 ```
 
 ### Environment Setup
