@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VisualBeatGraphOutput",
+  "type": "object",
+  "required": [
+    "video_id",
+    "run_id",
+    "artifact_version",
+    "scoring_model_version",
+    "prompt_hash",
+    "scene_contract_version",
+    "visual_beat_graph",
+    "schema_version"
+  ],
+  "properties": {
+    "video_id": { "type": "string" },
+    "run_id": { "type": "string" },
+    "artifact_version": { "type": "string" },
+    "scoring_model_version": { "type": "string" },
+    "prompt_hash": { "type": "string" },
+    "scene_contract_version": { "type": "string" },
+    "visual_beat_graph": {
+      "type": "object",
+      "required": ["version", "visual_beats"],
+      "properties": {
+        "version": { "type": "string" },
+        "visual_beats": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "visual_beat_id",
+              "parent_beat_id",
+              "sequence_index",
+              "visual_intensity_score",
+              "motion_type",
+              "expected_duration_seconds"
+            ],
+            "properties": {
+              "visual_beat_id": { "type": "string" },
+              "parent_beat_id": { "type": "string" },
+              "sequence_index": { "type": "integer" },
+              "visual_intensity_score": { "type": "number", "minimum": 0, "maximum": 1 },
+              "motion_type": { "type": "string" },
+              "expected_duration_seconds": { "type": "number", "minimum": 0.1 }
+            }
+          }
+        }
+      }
+    },
+    "schema_version": { "type": "string" }
+  }
+}
