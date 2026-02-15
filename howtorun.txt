@@ -46,6 +46,12 @@ Feature flags (shadow layers, override profile defaults)
 - SHORTS_INTEL_SHADOW_ENABLED=true|false
 - RETENTION_EVENTS_ENABLED=true|false
 
+Profile behavior (precedence: explicit env var > profile default > hardcoded false)
+- core: all optional layers disabled by default.
+- shadow: hook + beat shadow enabled by default.
+- full_shadow: all optional layers enabled by default.
+- unknown/unset profile: no defaults applied; each flag falls back to false unless explicitly set.
+
 Environment:
 - Copy .env.example to .env and fill in API keys.
 - Do not commit .env to GitHub.
