@@ -34,6 +34,15 @@
 - Route requests in this priority order: cache → free tier API → local model
 - Log: cache_hit_rate, provider_usage, 429_rate, fallback_rate per day
 
+
+## Hook Shadow Layer (Non-Blocking)
+A pre-research hook layer can run in shadow mode for retention experiments.
+
+**Rules**
+- Hook generation must be feature-flagged and non-blocking.
+- If hook generation fails, the pipeline continues with legacy Research flow.
+- Hook artifacts must include `artifact_version`, `scoring_model_version`, `prompt_hash`, and `status`.
+
 ## Scene Structuring Spec
 Scene structuring converts research output into ordered, self-contained scenes that can be handed off to Script and Visual agents without interpretation.
 

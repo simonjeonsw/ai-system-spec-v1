@@ -7,12 +7,26 @@ import sys
 from pathlib import Path
 from typing import Iterable
 
-from .run_logger import build_metrics, emit_run_log
+try:
+    from .run_logger import build_metrics, emit_run_log
+except Exception:  # pragma: no cover - allows local schema checks without Supabase env
+    def build_metrics(*, latency_ms: int = 0, tokens: int = 0, cost_usd: float = 0.0, cache_hit: bool = False, retry_count: int = 0):
+        return {
+            "latency_ms": latency_ms,
+            "tokens": tokens,
+            "cost_usd": cost_usd,
+            "cache_hit": cache_hit,
+            "retry_count": retry_count,
+        }
+
+    def emit_run_log(**_kwargs):
+        return "local-validation-no-runlog"
 from .schema_validator import validate_json_file, validate_payload
 from .storage_utils import normalize_video_id
 
 
 VALIDATION_TARGETS = {
+    "hook": "hook_output",
     "plan": "planner_output",
     "research": "research_output",
     "scenes": "scene_bundle",
@@ -20,6 +34,7 @@ VALIDATION_TARGETS = {
 }
 
 STAGE_FILENAMES = {
+    "hook": "{video_id}_hook.json",
     "research": "{video_id}_research.json",
     "plan": "{video_id}_plan.json",
     "scenes": "{video_id}_scenes.json",
@@ -57,7 +72,7 @@ def validate_all(video_id: str) -> None:
 def main() -> int:
     if len(sys.argv) < 3:
         print(
-            "Usage: python -m lib.validation_runner <plan|research|scenes|script|all> <json_path>...",
+            "Usage: python -m lib.validation_runner <hook|plan|research|scenes|script|all> <json_path>...",
             file=sys.stderr,
         )
         return 1

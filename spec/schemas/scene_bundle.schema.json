@@ -3,8 +3,7 @@
   "title": "SceneBundle",
   "type": "object",
   "required": [
-    "scenes",
-    "scene_contract_version"
+    "scenes"
   ],
   "properties": {
     "scenes": {
