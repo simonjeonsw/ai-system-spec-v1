@@ -37,6 +37,31 @@ BEAT_SHADOW_ENABLED_ENV = "BEAT_SHADOW_ENABLED"
 VISUAL_BEAT_SHADOW_ENABLED_ENV = "VISUAL_BEAT_SHADOW_ENABLED"
 SHORTS_INTEL_SHADOW_ENABLED_ENV = "SHORTS_INTEL_SHADOW_ENABLED"
 RETENTION_EVENTS_ENABLED_ENV = "RETENTION_EVENTS_ENABLED"
+PIPELINE_PROFILE_ENV = "PIPELINE_PROFILE"
+_TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
+_PIPELINE_PROFILES: Dict[str, Dict[str, bool]] = {
+    "core": {
+        HOOK_SHADOW_ENABLED_ENV: False,
+        BEAT_SHADOW_ENABLED_ENV: False,
+        VISUAL_BEAT_SHADOW_ENABLED_ENV: False,
+        SHORTS_INTEL_SHADOW_ENABLED_ENV: False,
+        RETENTION_EVENTS_ENABLED_ENV: False,
+    },
+    "shadow": {
+        HOOK_SHADOW_ENABLED_ENV: True,
+        BEAT_SHADOW_ENABLED_ENV: True,
+        VISUAL_BEAT_SHADOW_ENABLED_ENV: False,
+        SHORTS_INTEL_SHADOW_ENABLED_ENV: False,
+        RETENTION_EVENTS_ENABLED_ENV: False,
+    },
+    "full_shadow": {
+        HOOK_SHADOW_ENABLED_ENV: True,
+        BEAT_SHADOW_ENABLED_ENV: True,
+        VISUAL_BEAT_SHADOW_ENABLED_ENV: True,
+        SHORTS_INTEL_SHADOW_ENABLED_ENV: True,
+        RETENTION_EVENTS_ENABLED_ENV: True,
+    },
+}
 _CAMERA_ANGLES = [
     "wide shot of a bank vault",
     "close-up of a coin",
@@ -88,6 +113,45 @@ _VISUAL_CUE_VARIANTS = [
     "Use chart-led composition with callout annotations.",
     "Use storyboard sequence showing cause → effect → takeaway.",
 ]
+
+
+def _parse_bool_env(value: str | None) -> bool:
+    return (value or "").strip().lower() in _TRUTHY_ENV_VALUES
+
+
+def resolve_pipeline_profile() -> Dict[str, bool]:
+    profile_name = (os.getenv(PIPELINE_PROFILE_ENV) or "").strip().lower()
+    profile_defaults = _PIPELINE_PROFILES.get(profile_name, {})
+    resolved_toggles: Dict[str, bool] = {}
+    toggle_env_names = (
+        HOOK_SHADOW_ENABLED_ENV,
+        BEAT_SHADOW_ENABLED_ENV,
+        VISUAL_BEAT_SHADOW_ENABLED_ENV,
+        SHORTS_INTEL_SHADOW_ENABLED_ENV,
+        RETENTION_EVENTS_ENABLED_ENV,
+    )
+
+    for toggle_name in toggle_env_names:
+        explicit_env_value = os.getenv(toggle_name)
+        if explicit_env_value is not None:
+            resolved_toggles[toggle_name] = _parse_bool_env(explicit_env_value)
+            continue
+        if toggle_name in profile_defaults:
+            resolved_toggles[toggle_name] = profile_defaults[toggle_name]
+            continue
+        resolved_toggles[toggle_name] = False
+
+    resolved_profile = profile_name if profile_name in _PIPELINE_PROFILES else "none"
+    print(
+        "[pipeline_profile] "
+        f"profile={resolved_profile} "
+        f"{HOOK_SHADOW_ENABLED_ENV}={resolved_toggles[HOOK_SHADOW_ENABLED_ENV]} "
+        f"{BEAT_SHADOW_ENABLED_ENV}={resolved_toggles[BEAT_SHADOW_ENABLED_ENV]} "
+        f"{VISUAL_BEAT_SHADOW_ENABLED_ENV}={resolved_toggles[VISUAL_BEAT_SHADOW_ENABLED_ENV]} "
+        f"{SHORTS_INTEL_SHADOW_ENABLED_ENV}={resolved_toggles[SHORTS_INTEL_SHADOW_ENABLED_ENV]} "
+        f"{RETENTION_EVENTS_ENABLED_ENV}={resolved_toggles[RETENTION_EVENTS_ENABLED_ENV]}"
+    )
+    return resolved_toggles
 
 
 
@@ -1103,7 +1167,8 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     signal.signal(signal.SIGTERM, _handle_signal)
     try:
         script_updated = False
-        hook_shadow_enabled = os.getenv(HOOK_SHADOW_ENABLED_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
+        resolved_profile_toggles = resolve_pipeline_profile()
+        hook_shadow_enabled = resolved_profile_toggles[HOOK_SHADOW_ENABLED_ENV]
         hook_payload: Dict[str, Any] | None = None
         if hook_shadow_enabled:
             cached_hook = None if refresh else _load_stage_payload("hook", video_id)
@@ -1246,8 +1311,8 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             script_updated = True
         state["script_shorts"] = shorts_payload
         save_markdown("script", video_id, _render_script_markdown(script_payload, shorts_payload))
-        beat_shadow_enabled = os.getenv(BEAT_SHADOW_ENABLED_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
-        visual_beat_shadow_enabled = os.getenv(VISUAL_BEAT_SHADOW_ENABLED_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
+        beat_shadow_enabled = resolved_profile_toggles[BEAT_SHADOW_ENABLED_ENV]
+        visual_beat_shadow_enabled = resolved_profile_toggles[VISUAL_BEAT_SHADOW_ENABLED_ENV]
         beat_payload: Dict[str, Any] | None = None
         visual_beat_payload: Dict[str, Any] | None = None
         if beat_shadow_enabled:
@@ -1301,7 +1366,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
                 metrics=build_metrics(cache_hit=False),
                 run_id=_log_run_id(run_id, "visual_beat_shadow", 1),
             )
-        shorts_intel_shadow_enabled = os.getenv(SHORTS_INTEL_SHADOW_ENABLED_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
+        shorts_intel_shadow_enabled = resolved_profile_toggles[SHORTS_INTEL_SHADOW_ENABLED_ENV]
         shorts_intel_payload: Dict[str, Any] | None = None
         if shorts_intel_shadow_enabled and beat_payload:
             cached_shorts_intel = None if refresh else _load_stage_payload("shorts_intelligence", video_id)
@@ -1467,7 +1532,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             save_json("metadata", video_id, metadata_payload)
         state["metadata"] = metadata_payload
 
-        retention_events_enabled = os.getenv(RETENTION_EVENTS_ENABLED_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
+        retention_events_enabled = resolved_profile_toggles[RETENTION_EVENTS_ENABLED_ENV]
         if retention_events_enabled:
             feature_event = build_feature_snapshot_event(
                 video_id=video_id,
