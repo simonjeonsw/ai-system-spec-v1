@@ -134,6 +134,45 @@ _VISUAL_CUE_VARIANTS = [
 ]
 
 
+def _parse_bool_env(value: str | None) -> bool:
+    return (value or "").strip().lower() in _TRUTHY_ENV_VALUES
+
+
+def resolve_pipeline_profile() -> Dict[str, bool]:
+    profile_name = (os.getenv(PIPELINE_PROFILE_ENV) or "").strip().lower()
+    profile_defaults = _PIPELINE_PROFILES.get(profile_name, {})
+    resolved_toggles: Dict[str, bool] = {}
+    toggle_env_names = (
+        HOOK_SHADOW_ENABLED_ENV,
+        BEAT_SHADOW_ENABLED_ENV,
+        VISUAL_BEAT_SHADOW_ENABLED_ENV,
+        SHORTS_INTEL_SHADOW_ENABLED_ENV,
+        RETENTION_EVENTS_ENABLED_ENV,
+    )
+
+    for toggle_name in toggle_env_names:
+        explicit_env_value = os.getenv(toggle_name)
+        if explicit_env_value is not None:
+            resolved_toggles[toggle_name] = _parse_bool_env(explicit_env_value)
+            continue
+        if toggle_name in profile_defaults:
+            resolved_toggles[toggle_name] = profile_defaults[toggle_name]
+            continue
+        resolved_toggles[toggle_name] = False
+
+    resolved_profile = profile_name if profile_name in _PIPELINE_PROFILES else "none"
+    print(
+        "[pipeline_profile] "
+        f"profile={resolved_profile} "
+        f"{HOOK_SHADOW_ENABLED_ENV}={resolved_toggles[HOOK_SHADOW_ENABLED_ENV]} "
+        f"{BEAT_SHADOW_ENABLED_ENV}={resolved_toggles[BEAT_SHADOW_ENABLED_ENV]} "
+        f"{VISUAL_BEAT_SHADOW_ENABLED_ENV}={resolved_toggles[VISUAL_BEAT_SHADOW_ENABLED_ENV]} "
+        f"{SHORTS_INTEL_SHADOW_ENABLED_ENV}={resolved_toggles[SHORTS_INTEL_SHADOW_ENABLED_ENV]} "
+        f"{RETENTION_EVENTS_ENABLED_ENV}={resolved_toggles[RETENTION_EVENTS_ENABLED_ENV]}"
+    )
+    return resolved_toggles
+
+
 
 def _parse_payload(text: str) -> Dict[str, Any]:
     if not text:
