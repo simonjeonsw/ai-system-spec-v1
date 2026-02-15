@@ -1,0 +1,24 @@
+{
+  "video_id": "d9XXRNC07Ic",
+  "decision": "hold",
+  "action": "collect_more_data",
+  "policy": {
+    "ctr_baseline": 5.0,
+    "avd_baseline": 40.0,
+    "rework_ctr_floor": 4.0,
+    "rework_avd_floor": 35.0,
+    "min_consecutive": 2
+  },
+  "window_size": 2,
+  "evaluated_outcomes": 1,
+  "signals": [
+    {
+      "created_at_utc": "2026-01-01T00:00:00Z",
+      "ctr": 4.8,
+      "avd": 39.0,
+      "meets_publish": false,
+      "meets_rework": false
+    }
+  ],
+  "schema_version": "1.0"
+}

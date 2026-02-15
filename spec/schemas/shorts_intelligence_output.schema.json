@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ShortsIntelligenceOutput",
+  "type": "object",
+  "required": [
+    "video_id",
+    "run_id",
+    "artifact_version",
+    "scoring_model_version",
+    "prompt_hash",
+    "scene_contract_version",
+    "shorts_intelligence",
+    "schema_version"
+  ],
+  "properties": {
+    "video_id": { "type": "string" },
+    "run_id": { "type": "string" },
+    "artifact_version": { "type": "string" },
+    "scoring_model_version": { "type": "string" },
+    "prompt_hash": { "type": "string" },
+    "scene_contract_version": { "type": "string" },
+    "shorts_intelligence": {
+      "type": "object",
+      "required": ["version", "candidates"],
+      "properties": {
+        "version": { "type": "string" },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "candidate_id",
+              "source_beat_ids",
+              "source_visual_beat_ids",
+              "features",
+              "composite_score",
+              "shorts_candidate_flag",
+              "shorts_rank_priority"
+            ],
+            "properties": {
+              "candidate_id": { "type": "string" },
+              "source_beat_ids": { "type": "array", "items": { "type": "string" } },
+              "source_visual_beat_ids": { "type": "array", "items": { "type": "string" } },
+              "features": {
+                "type": "object",
+                "required": [
+                  "shock_value_score",
+                  "emotion_peak_score",
+                  "standalone_story_score",
+                  "curiosity_gap_score",
+                  "energy_curve_index",
+                  "visual_intensity_score",
+                  "drop_risk_prediction",
+                  "knowledge_density_score",
+                  "clip_independence_score",
+                  "opening_velocity_score",
+                  "pattern_interrupt_density",
+                  "loop_potential_score",
+                  "cognitive_load_index"
+                ],
+                "properties": {
+                  "shock_value_score": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "emotion_peak_score": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "standalone_story_score": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "curiosity_gap_score": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "energy_curve_index": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "visual_intensity_score": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "drop_risk_prediction": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "knowledge_density_score": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "clip_independence_score": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "opening_velocity_score": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "pattern_interrupt_density": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "loop_potential_score": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "cognitive_load_index": { "type": "number", "minimum": 0, "maximum": 1 }
+                }
+              },
+              "composite_score": { "type": "number", "minimum": 0, "maximum": 1 },
+              "shorts_candidate_flag": { "type": "boolean" },
+              "shorts_rank_priority": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "schema_version": { "type": "string" }
+  }
+}

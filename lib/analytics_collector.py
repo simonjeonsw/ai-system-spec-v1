@@ -15,6 +15,8 @@ from dotenv import load_dotenv
 
 from .run_logger import build_metrics, emit_run_log
 from .supabase_client import supabase
+from .retention_events import build_outcome_snapshot_event
+from .learning_gate import evaluate_learning_gate
 
 
 ANALYTICS_SCOPES = [
@@ -103,6 +105,62 @@ def store_metrics_snapshot(
     return payload
 
 
+
+
+def append_retention_outcome_event(*, video_id: str, metrics: Dict[str, Any]) -> Dict[str, Any]:
+    run_id = f"analytics-{video_id}"
+    event = build_outcome_snapshot_event(
+        video_id=video_id,
+        run_id=run_id,
+        scene_contract_version="legacy_scene_v1",
+        ctr=metrics.get("impressions_ctr"),
+        avd=metrics.get("average_view_duration"),
+        retention_curve_snapshots=[],
+    )
+    data_dir = Path(__file__).resolve().parent.parent / "data"
+    path = data_dir / f"{video_id}_retention_events.json"
+    payload: Dict[str, Any] = {"events": [], "schema_version": "1.0"}
+    if path.exists():
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            payload = {"events": [], "schema_version": "1.0"}
+    payload.setdefault("events", [])
+    payload["events"].append(event)
+    payload["schema_version"] = "1.0"
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return event
+
+def persist_learning_artifacts(*, video_id: str, retention_event: Dict[str, Any], learning_gate: Dict[str, Any]) -> None:
+    """Persist learning artifacts to Supabase if optional tables are available."""
+    try:
+        supabase.table("retention_events").insert(
+            {
+                "video_id": video_id,
+                "event_type": retention_event.get("event_type"),
+                "event_window": retention_event.get("event_window"),
+                "payload": retention_event,
+            }
+        ).execute()
+    except Exception as exc:
+        print(f"⚠️ retention_events insert skipped: {exc}", file=sys.stderr)
+
+    try:
+        supabase.table("learning_gates").upsert(
+            {
+                "video_id": video_id,
+                "decision": learning_gate.get("decision"),
+                "action": learning_gate.get("action"),
+                "policy": learning_gate.get("policy"),
+                "window_size": learning_gate.get("window_size"),
+                "payload": learning_gate,
+            },
+            on_conflict="video_id",
+        ).execute()
+    except Exception as exc:
+        print(f"⚠️ learning_gates upsert skipped: {exc}", file=sys.stderr)
+
+
 def collect_metrics_for_videos(
     *,
     video_ids: Iterable[str],
@@ -122,7 +180,10 @@ def collect_metrics_for_videos(
             end_date=end_date,
             metrics=metrics,
         )
-        results.append({"metrics": metrics, "snapshot": snapshot})
+        retention_event = append_retention_outcome_event(video_id=video_id, metrics=metrics)
+        learning_gate = evaluate_learning_gate(video_id=video_id)
+        persist_learning_artifacts(video_id=video_id, retention_event=retention_event, learning_gate=learning_gate)
+        results.append({"metrics": metrics, "snapshot": snapshot, "retention_event": retention_event, "learning_gate": learning_gate})
     return {"start_date": start_date, "end_date": end_date, "results": results}
 
 
@@ -163,7 +224,10 @@ def main() -> int:
                 end_date=end_date,
                 metrics=metrics,
             )
-            payload = {"metrics": metrics, "snapshot": snapshot}
+            retention_event = append_retention_outcome_event(video_id=video_id, metrics=metrics)
+            learning_gate = evaluate_learning_gate(video_id=video_id)
+            persist_learning_artifacts(video_id=video_id, retention_event=retention_event, learning_gate=learning_gate)
+            payload = {"metrics": metrics, "snapshot": snapshot, "retention_event": retention_event, "learning_gate": learning_gate}
             output_refs = {"metrics": metrics}
         emit_run_log(
             stage="analytics",
