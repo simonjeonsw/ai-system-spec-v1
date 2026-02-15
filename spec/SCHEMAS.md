@@ -2,6 +2,118 @@
 
 Schemas define the canonical inputs and outputs for each module.
 
+
+## Hook Output Schema (v1.1)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HookOutput",
+  "type": "object",
+  "required": [
+    "video_id",
+    "artifact_version",
+    "scoring_model_version",
+    "prompt_hash",
+    "generated_from_stage",
+    "source_artifact_refs",
+    "hook_hypothesis",
+    "status",
+    "schema_version"
+  ],
+  "properties": {
+    "video_id": { "type": "string" },
+    "artifact_version": { "type": "string" },
+    "scoring_model_version": { "type": "string" },
+    "prompt_hash": { "type": "string" },
+    "generated_from_stage": { "type": "string", "enum": ["seed", "refined"] },
+    "source_artifact_refs": { "type": "object" },
+    "hook_hypothesis": { "type": "object" },
+    "status": { "type": "string" },
+    "fallback_reason": { "type": ["string", "null"] },
+    "schema_version": { "type": "string" }
+  }
+}
+```
+
+## Beat Graph Output Schema (v1.0)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BeatGraphOutput",
+  "type": "object",
+  "required": [
+    "video_id", "run_id", "artifact_version", "scoring_model_version",
+    "prompt_hash", "scene_contract_version", "beat_graph", "schema_version"
+  ]
+}
+```
+
+## Visual Beat Graph Output Schema (v1.0)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VisualBeatGraphOutput",
+  "type": "object",
+  "required": [
+    "video_id", "run_id", "artifact_version", "scoring_model_version",
+    "prompt_hash", "scene_contract_version", "visual_beat_graph", "schema_version"
+  ]
+}
+```
+
+## Shorts Intelligence Output Schema (v1.0)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ShortsIntelligenceOutput",
+  "type": "object",
+  "required": [
+    "video_id", "run_id", "artifact_version", "scoring_model_version",
+    "prompt_hash", "scene_contract_version", "shorts_intelligence", "schema_version"
+  ]
+}
+```
+
+## Retention Feature Event Schema (v1.0)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RetentionFeatureEvent",
+  "type": "object",
+  "required": [
+    "video_id", "run_id", "artifact_type", "artifact_version", "event_type",
+    "event_window", "scoring_model_version", "prompt_hash", "scene_contract_version",
+    "feature_snapshot", "outcome_metrics", "created_at_utc", "event_key", "schema_version"
+    // optional: lineage_source = db|local|none
+  ]
+}
+```
+
+## Retention Feature Event Bundle Schema (v1.1)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RetentionFeatureEventBundle",
+  "type": "object",
+  "required": ["events", "schema_version"]
+}
+```
+
+- Event items now require full retention event keys (`run_id`, `artifact_type`, `artifact_version`, `event_key`, etc.).
+
+## Learning Gate Output Schema (v1.1)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LearningGateOutput",
+  "type": "object",
+  "required": [
+    "video_id", "decision", "action", "policy", "window_size",
+    "evaluated_outcomes", "signals", "lineage", "schema_version"
+  ]
+}
+```
+
 ## Planner Output Schema (v1.0)
 ```json
 {
@@ -175,6 +287,24 @@ Schemas define the canonical inputs and outputs for each module.
     "narration_prompt": { "type": "string" },
     "transition_note": { "type": "string" },
     "schema_version": { "type": "string" }
+  }
+}
+```
+
+
+## Scene Bundle Schema (Legacy Envelope, v1.0)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SceneBundle",
+  "type": "object",
+  "required": ["scenes"],
+  "properties": {
+    "scenes": {"type": "array", "items": {"type": "object"}},
+    "scene_contract_version": {"type": "string"},
+    "scene_engine_version": {"type": "string"},
+    "style_profile": {"type": "string"},
+    "source_script_hash": {"type": "string"}
   }
 }
 ```
