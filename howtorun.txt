@@ -36,8 +36,10 @@ python -m lib.analytics_collector path/to/video_ids.txt [start_date] [end_date]
 9. QA gate decision (qa_gate.py)
 python -m lib.qa_gate spec/samples/metrics_sample.json
 
-Feature flags (shadow layers)
+Runtime profile (recommended)
 - PIPELINE_PROFILE=core|shadow|full_shadow
+
+Feature flags (shadow layers, override profile defaults)
 - HOOK_SHADOW_ENABLED=true|false
 - BEAT_SHADOW_ENABLED=true|false
 - VISUAL_BEAT_SHADOW_ENABLED=true|false
@@ -55,3 +57,12 @@ Environment:
 - Do not commit .env to GitHub.
 - Each stage writes a local backup JSON to data/<video_id>_<stage>.json.
 - Outputs are upserted to Supabase for reuse and refreshes.
+
+
+Syncing changes from another window/workspace
+- Pre-flight check (run in terminal, not chat):
+  git status --short --branch
+  git log --oneline -n 3
+- Same repo + different branch: commit there, then `git cherry-pick <commit_sha>` here.
+- Different clone/container: `git push` from source, then `git fetch` + `git cherry-pick origin/<branch>` here.
+- Warning: uncommitted changes in another workspace cannot be synchronized reliably.

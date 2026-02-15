@@ -3,7 +3,7 @@
 Schemas define the canonical inputs and outputs for each module.
 
 
-## Hook Output Schema (v1.0)
+## Hook Output Schema (v1.1)
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
@@ -14,6 +14,8 @@ Schemas define the canonical inputs and outputs for each module.
     "artifact_version",
     "scoring_model_version",
     "prompt_hash",
+    "generated_from_stage",
+    "source_artifact_refs",
     "hook_hypothesis",
     "status",
     "schema_version"
@@ -23,6 +25,8 @@ Schemas define the canonical inputs and outputs for each module.
     "artifact_version": { "type": "string" },
     "scoring_model_version": { "type": "string" },
     "prompt_hash": { "type": "string" },
+    "generated_from_stage": { "type": "string", "enum": ["seed", "refined"] },
+    "source_artifact_refs": { "type": "object" },
     "hook_hypothesis": { "type": "object" },
     "status": { "type": "string" },
     "fallback_reason": { "type": ["string", "null"] },

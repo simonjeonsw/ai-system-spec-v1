@@ -46,10 +46,11 @@ This is an operating system for an AI-driven media company.
   mcp_config.md
 
 ## Execution Model (Current Runtime)
-Hook Shadow (optional, non-blocking)
+Hook Seed Shadow (optional, non-blocking)
  → Research
  → Plan
  → Script (long + shorts)
+ → Hook Refined Shadow (optional, non-blocking)
  → Beat Shadow (optional)
  → Visual Beat Shadow (optional)
  → Shorts Intelligence Shadow (optional)
@@ -72,8 +73,10 @@ python -m lib.pipeline_runner --url <youtube_url_or_id> --validate
 python -m lib.analytics_collector <video_id> [start_date] [end_date]
 python -m lib.analytics_collector path/to/video_ids.txt [start_date] [end_date]
 
-# Optional profile + shadow flags
+# Optional runtime profile (recommended)
 # PIPELINE_PROFILE=core|shadow|full_shadow
+#
+# Explicit env overrides profile defaults when set
 # HOOK_SHADOW_ENABLED=true
 # BEAT_SHADOW_ENABLED=true
 # VISUAL_BEAT_SHADOW_ENABLED=true
@@ -90,7 +93,7 @@ Profile presets (resolved with precedence: explicit env var > profile default > 
 
 ### Environment Setup
 - Copy `.env.example` to `.env` and populate API keys.
-- Each stage writes local backups to `data/<stage>_<video_id>.json`.
+- Each stage writes local backups to `data/<video_id>_<stage>.json`.
 - Outputs are upserted to Supabase to avoid duplicate rows on refresh.
 
 ## Golden Rule

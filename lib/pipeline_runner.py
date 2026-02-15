@@ -24,7 +24,7 @@ from .schema_validator import validate_payload
 from .validation_runner import validate_all
 from .validator import ScriptValidator
 from .ops import log_experiment
-from .hook_layer import generate_hook_shadow
+from .hook_layer import generate_hook_seed, generate_hook_refined
 from .beat_shadow import generate_beat_graph_shadow, generate_visual_beat_graph_shadow
 from .shorts_intel import generate_shorts_intelligence_shadow
 from .retention_events import build_feature_snapshot_event
@@ -38,8 +38,8 @@ VISUAL_BEAT_SHADOW_ENABLED_ENV = "VISUAL_BEAT_SHADOW_ENABLED"
 SHORTS_INTEL_SHADOW_ENABLED_ENV = "SHORTS_INTEL_SHADOW_ENABLED"
 RETENTION_EVENTS_ENABLED_ENV = "RETENTION_EVENTS_ENABLED"
 PIPELINE_PROFILE_ENV = "PIPELINE_PROFILE"
-_TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
-_PIPELINE_PROFILES: Dict[str, Dict[str, bool]] = {
+
+_PIPELINE_PROFILES = {
     "core": {
         HOOK_SHADOW_ENABLED_ENV: False,
         BEAT_SHADOW_ENABLED_ENV: False,
@@ -50,8 +50,8 @@ _PIPELINE_PROFILES: Dict[str, Dict[str, bool]] = {
     "shadow": {
         HOOK_SHADOW_ENABLED_ENV: True,
         BEAT_SHADOW_ENABLED_ENV: True,
-        VISUAL_BEAT_SHADOW_ENABLED_ENV: False,
-        SHORTS_INTEL_SHADOW_ENABLED_ENV: False,
+        VISUAL_BEAT_SHADOW_ENABLED_ENV: True,
+        SHORTS_INTEL_SHADOW_ENABLED_ENV: True,
         RETENTION_EVENTS_ENABLED_ENV: False,
     },
     "full_shadow": {
@@ -62,6 +62,25 @@ _PIPELINE_PROFILES: Dict[str, Dict[str, bool]] = {
         RETENTION_EVENTS_ENABLED_ENV: True,
     },
 }
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def resolve_pipeline_profile() -> tuple[str, Dict[str, bool]]:
+    requested = (os.getenv(PIPELINE_PROFILE_ENV, "core") or "core").strip().lower()
+    if requested not in _PIPELINE_PROFILES:
+        requested = "core"
+    resolved = {
+        key: _env_bool(key, default=value)
+        for key, value in _PIPELINE_PROFILES[requested].items()
+    }
+    return requested, resolved
+
 _CAMERA_ANGLES = [
     "wide shot of a bank vault",
     "close-up of a coin",
@@ -1061,6 +1080,8 @@ def _run_stage(
 
 _STAGE_SCHEMA = {
     "hook": "hook_output",
+    "hook_seed": "hook_output",
+    "hook_refined": "hook_output",
     "research": "research_output",
     "beat_graph": "beat_graph_output",
     "visual_beat_graph": "visual_beat_graph_output",
@@ -1137,6 +1158,10 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     def _checkpoint_state() -> None:
         if state.get("hook"):
             save_json("hook", video_id, state["hook"])
+        if state.get("hook_seed"):
+            save_json("hook_seed", video_id, state["hook_seed"])
+        if state.get("hook_refined"):
+            save_json("hook_refined", video_id, state["hook_refined"])
         if state.get("research"):
             save_json("research", video_id, state["research"])
         if state.get("beat_graph"):
@@ -1167,33 +1192,50 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     signal.signal(signal.SIGTERM, _handle_signal)
     try:
         script_updated = False
-        resolved_profile_toggles = resolve_pipeline_profile()
-        hook_shadow_enabled = resolved_profile_toggles[HOOK_SHADOW_ENABLED_ENV]
+        profile_name, profile_toggles = resolve_pipeline_profile()
+        print(f"🔧 Pipeline profile resolved: {profile_name} -> {json.dumps(profile_toggles, ensure_ascii=False)}")
+        emit_run_log(
+            stage="pipeline_profile",
+            status="success",
+            input_refs={"video_id": video_id, "profile": profile_name},
+            output_refs={"toggles": profile_toggles},
+            metrics=build_metrics(cache_hit=False),
+            run_id=_log_run_id(run_id, "pipeline_profile", 1),
+        )
+
+        hook_shadow_enabled = profile_toggles[HOOK_SHADOW_ENABLED_ENV]
+        selected_hook_stage = "disabled"
+        hook_seed_payload: Dict[str, Any] | None = None
+        hook_refined_payload: Dict[str, Any] | None = None
         hook_payload: Dict[str, Any] | None = None
         if hook_shadow_enabled:
-            cached_hook = None if refresh else _load_stage_payload("hook", video_id)
-            if cached_hook:
-                hook_payload = cached_hook
+            cached_hook_seed = None if refresh else _load_stage_payload("hook_seed", video_id)
+            if cached_hook_seed:
+                hook_seed_payload = cached_hook_seed
             else:
-                hook_payload = generate_hook_shadow(video_id)
-                save_json("hook", video_id, hook_payload)
+                hook_seed_payload = generate_hook_seed(video_id)
+                save_json("hook_seed", video_id, hook_seed_payload)
+            state["hook_seed"] = hook_seed_payload
+            hook_payload = hook_seed_payload
             state["hook"] = hook_payload
+            save_json("hook", video_id, hook_payload)
+            selected_hook_stage = "seed"
             emit_run_log(
-                stage="hook_shadow",
-                status="success" if hook_payload.get("status") == "ok" else "warning",
-                input_refs={"video_id": video_id, "enabled": True},
-                output_refs={"status": hook_payload.get("status"), "fallback_reason": hook_payload.get("fallback_reason")},
-                metrics=build_metrics(cache_hit=bool(cached_hook)),
-                run_id=_log_run_id(run_id, "hook_shadow", 1),
+                stage="hook_shadow_seed",
+                status="success" if hook_seed_payload.get("status") == "ok" else "warning",
+                input_refs={"video_id": video_id, "enabled": True, "generated_from_stage": "seed"},
+                output_refs={"status": hook_seed_payload.get("status"), "fallback_reason": hook_seed_payload.get("fallback_reason")},
+                metrics=build_metrics(cache_hit=bool(cached_hook_seed)),
+                run_id=_log_run_id(run_id, "hook_shadow_seed", 1),
             )
         else:
             emit_run_log(
-                stage="hook_shadow",
+                stage="hook_shadow_seed",
                 status="skipped",
                 input_refs={"video_id": video_id, "enabled": False},
                 output_refs={"note": "hook shadow disabled"},
                 metrics=build_metrics(cache_hit=False),
-                run_id=_log_run_id(run_id, "hook_shadow", 1),
+                run_id=_log_run_id(run_id, "hook_shadow_seed", 1),
             )
         cached_research = None if refresh else _load_stage_payload("research", video_id)
         if cached_research:
@@ -1311,8 +1353,38 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             script_updated = True
         state["script_shorts"] = shorts_payload
         save_markdown("script", video_id, _render_script_markdown(script_payload, shorts_payload))
-        beat_shadow_enabled = resolved_profile_toggles[BEAT_SHADOW_ENABLED_ENV]
-        visual_beat_shadow_enabled = resolved_profile_toggles[VISUAL_BEAT_SHADOW_ENABLED_ENV]
+
+        if hook_shadow_enabled:
+            cached_hook_refined = None if refresh else _load_stage_payload("hook_refined", video_id)
+            if cached_hook_refined:
+                hook_refined_payload = cached_hook_refined
+            else:
+                hook_refined_payload = generate_hook_refined(video_id, research_payload, script_payload)
+                save_json("hook_refined", video_id, hook_refined_payload)
+            state["hook_refined"] = hook_refined_payload
+            hook_payload = hook_refined_payload
+            selected_hook_stage = "refined"
+            save_json("hook", video_id, hook_payload)
+            state["hook"] = hook_payload
+            emit_run_log(
+                stage="hook_shadow_refined",
+                status="success" if hook_refined_payload.get("status") == "ok" else "warning",
+                input_refs={"video_id": video_id, "enabled": True, "generated_from_stage": "refined"},
+                output_refs={"status": hook_refined_payload.get("status"), "fallback_reason": hook_refined_payload.get("fallback_reason")},
+                metrics=build_metrics(cache_hit=bool(cached_hook_refined)),
+                run_id=_log_run_id(run_id, "hook_shadow_refined", 1),
+            )
+        else:
+            emit_run_log(
+                stage="hook_shadow_refined",
+                status="skipped",
+                input_refs={"video_id": video_id, "enabled": False},
+                output_refs={"note": "hook shadow disabled"},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "hook_shadow_refined", 1),
+            )
+        beat_shadow_enabled = profile_toggles[BEAT_SHADOW_ENABLED_ENV]
+        visual_beat_shadow_enabled = profile_toggles[VISUAL_BEAT_SHADOW_ENABLED_ENV]
         beat_payload: Dict[str, Any] | None = None
         visual_beat_payload: Dict[str, Any] | None = None
         if beat_shadow_enabled:
@@ -1366,7 +1438,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
                 metrics=build_metrics(cache_hit=False),
                 run_id=_log_run_id(run_id, "visual_beat_shadow", 1),
             )
-        shorts_intel_shadow_enabled = resolved_profile_toggles[SHORTS_INTEL_SHADOW_ENABLED_ENV]
+        shorts_intel_shadow_enabled = profile_toggles[SHORTS_INTEL_SHADOW_ENABLED_ENV]
         shorts_intel_payload: Dict[str, Any] | None = None
         if shorts_intel_shadow_enabled and beat_payload:
             cached_shorts_intel = None if refresh else _load_stage_payload("shorts_intelligence", video_id)
@@ -1532,7 +1604,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             save_json("metadata", video_id, metadata_payload)
         state["metadata"] = metadata_payload
 
-        retention_events_enabled = resolved_profile_toggles[RETENTION_EVENTS_ENABLED_ENV]
+        retention_events_enabled = profile_toggles[RETENTION_EVENTS_ENABLED_ENV]
         if retention_events_enabled:
             feature_event = build_feature_snapshot_event(
                 video_id=video_id,
@@ -1641,7 +1713,12 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     return {
         "run_id": run_id,
         "video_id": video_id,
+        "pipeline_profile": profile_name,
+        "shadow_toggles": profile_toggles,
         "hook": state.get("hook"),
+        "hook_seed": state.get("hook_seed"),
+        "hook_refined": state.get("hook_refined"),
+        "selected_hook_stage": selected_hook_stage,
         "research": research_payload,
         "beat_graph": state.get("beat_graph"),
         "visual_beat_graph": state.get("visual_beat_graph"),
@@ -1696,7 +1773,7 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(f"✅ Pipeline completed: {result['video_id']}")
-        print("Artifacts: data/{video_id}_{research|plan|script|script_long|script_shorts|scenes|metadata}.{json|md}")
+        print("Artifacts: data/{video_id}_{hook|hook_seed|hook_refined|research|plan|script|script_long|script_shorts|scenes|metadata}.{json|md}")
     save_json("validation_report", result["video_id"], result.get("validation_report") or {"status": "n/a", "errors": [], "sentence_map": []})
     save_json("verification_report", result["video_id"], result.get("validation_report") or {"status": "n/a", "errors": [], "sentence_map": []})
     manifest_path = Path(__file__).resolve().parent.parent / "data" / f"{result['video_id']}_pipeline.json"
@@ -1704,6 +1781,8 @@ def main() -> int:
         "video_id": result["video_id"],
         "files": {
             "hook": f"data/{result['video_id']}_hook.json",
+            "hook_seed": f"data/{result['video_id']}_hook_seed.json",
+            "hook_refined": f"data/{result['video_id']}_hook_refined.json",
             "research": f"data/{result['video_id']}_research.json",
             "beat_graph": f"data/{result['video_id']}_beat_graph.json",
             "visual_beat_graph": f"data/{result['video_id']}_visual_beat_graph.json",

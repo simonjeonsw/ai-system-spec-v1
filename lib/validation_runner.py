@@ -38,6 +38,8 @@ VALIDATION_TARGETS = {
     "script": "script_output",
 }
 
+OPTIONAL_STAGES = {"hook", "shorts_intelligence", "retention_events"}
+
 STAGE_FILENAMES = {
     "hook": "{video_id}_hook.json",
     "research": "{video_id}_research.json",
@@ -78,6 +80,8 @@ def validate_all(video_id: str) -> None:
     for stage, template in STAGE_FILENAMES.items():
         path = data_dir / template.format(video_id=video_id)
         if not path.exists():
+            if stage in OPTIONAL_STAGES:
+                continue
             raise FileNotFoundError(f"Missing file for stage {stage}: {path}")
         validate_files(stage, [str(path)])
 

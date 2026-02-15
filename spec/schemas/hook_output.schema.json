@@ -7,6 +7,8 @@
     "artifact_version",
     "scoring_model_version",
     "prompt_hash",
+    "generated_from_stage",
+    "source_artifact_refs",
     "hook_hypothesis",
     "status",
     "schema_version"
@@ -16,6 +18,19 @@
     "artifact_version": { "type": "string" },
     "scoring_model_version": { "type": "string" },
     "prompt_hash": { "type": "string" },
+    "generated_from_stage": {
+      "type": "string",
+      "enum": ["seed", "refined"]
+    },
+    "source_artifact_refs": {
+      "type": "object",
+      "required": ["research", "script_long"],
+      "properties": {
+        "research": { "type": "string" },
+        "script_long": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
     "hook_hypothesis": {
       "type": "object",
       "required": [
