@@ -7,22 +7,47 @@ import sys
 from pathlib import Path
 from typing import Iterable
 
-from .run_logger import build_metrics, emit_run_log
+try:
+    from .run_logger import build_metrics, emit_run_log
+except Exception:  # pragma: no cover - allows local schema checks without Supabase env
+    def build_metrics(*, latency_ms: int = 0, tokens: int = 0, cost_usd: float = 0.0, cache_hit: bool = False, retry_count: int = 0):
+        return {
+            "latency_ms": latency_ms,
+            "tokens": tokens,
+            "cost_usd": cost_usd,
+            "cache_hit": cache_hit,
+            "retry_count": retry_count,
+        }
+
+    def emit_run_log(**_kwargs):
+        return "local-validation-no-runlog"
 from .schema_validator import validate_json_file, validate_payload
 from .storage_utils import normalize_video_id
 
 
 VALIDATION_TARGETS = {
+    "hook": "hook_output",
     "plan": "planner_output",
     "research": "research_output",
-    "scenes": "scene_output",
+    "beat_graph": "beat_graph_output",
+    "visual_beat_graph": "visual_beat_graph_output",
+    "shorts_intelligence": "shorts_intelligence_output",
+    "retention_events": "retention_feature_event_bundle",
+    "learning_gate": "learning_gate_output",
+    "scenes": "scene_bundle",
     "script": "script_output",
 }
 
+OPTIONAL_STAGES = {"hook", "shorts_intelligence", "retention_events"}
+
 STAGE_FILENAMES = {
+    "hook": "{video_id}_hook.json",
     "research": "{video_id}_research.json",
     "plan": "{video_id}_plan.json",
     "scenes": "{video_id}_scenes.json",
+    "shorts_intelligence": "{video_id}_shorts_intelligence.json",
+    "retention_events": "{video_id}_retention_events.json",
+    "learning_gate": "{video_id}_learning_gate.json",
     "script": "{video_id}_script.json",
 }
 
@@ -32,11 +57,20 @@ def validate_files(stage: str, json_paths: Iterable[str]) -> None:
     for path in json_paths:
         if stage == "scenes":
             payload = json.loads(Path(path).read_text(encoding="utf-8"))
-            scenes = payload.get("scenes", [])
-            if not scenes:
-                raise ValueError("Scene output missing 'scenes' array.")
-            for scene in scenes:
-                validate_payload(schema_name, scene)
+            if isinstance(payload, dict) and "scenes" in payload:
+                scenes = payload.get("scenes", [])
+                if not scenes:
+                    raise ValueError("Scene output missing 'scenes' array.")
+                validate_payload(schema_name, payload)
+                for scene in scenes:
+                    validate_payload("scene_output", scene)
+            else:
+                validate_payload("scene_output", payload)
+        elif stage == "retention_events":
+            payload = json.loads(Path(path).read_text(encoding="utf-8"))
+            validate_payload(schema_name, payload)
+            for event in payload.get("events", []):
+                validate_payload("retention_feature_event", event)
         else:
             validate_json_file(schema_name, path)
 
@@ -46,6 +80,8 @@ def validate_all(video_id: str) -> None:
     for stage, template in STAGE_FILENAMES.items():
         path = data_dir / template.format(video_id=video_id)
         if not path.exists():
+            if stage in OPTIONAL_STAGES:
+                continue
             raise FileNotFoundError(f"Missing file for stage {stage}: {path}")
         validate_files(stage, [str(path)])
 
@@ -53,7 +89,7 @@ def validate_all(video_id: str) -> None:
 def main() -> int:
     if len(sys.argv) < 3:
         print(
-            "Usage: python -m lib.validation_runner <plan|research|scenes|script|all> <json_path>...",
+            "Usage: python -m lib.validation_runner <hook|plan|research|beat_graph|visual_beat_graph|shorts_intelligence|retention_events|learning_gate|scenes|script|all> <json_path>...",
             file=sys.stderr,
         )
         return 1

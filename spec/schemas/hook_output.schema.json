@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HookOutput",
+  "type": "object",
+  "required": [
+    "video_id",
+    "artifact_version",
+    "scoring_model_version",
+    "prompt_hash",
+    "generated_from_stage",
+    "source_artifact_refs",
+    "hook_hypothesis",
+    "status",
+    "schema_version"
+  ],
+  "properties": {
+    "video_id": { "type": "string" },
+    "artifact_version": { "type": "string" },
+    "scoring_model_version": { "type": "string" },
+    "prompt_hash": { "type": "string" },
+    "generated_from_stage": {
+      "type": "string",
+      "enum": ["seed", "refined"]
+    },
+    "source_artifact_refs": {
+      "type": "object",
+      "required": ["research", "script_long"],
+      "properties": {
+        "research": { "type": "string" },
+        "script_long": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "hook_hypothesis": {
+      "type": "object",
+      "required": [
+        "hook_id",
+        "hook_text",
+        "hook_type",
+        "curiosity_gap_score",
+        "emotional_trigger_tags",
+        "power_keyword_tags",
+        "retention_prediction_score",
+        "confidence_score"
+      ],
+      "properties": {
+        "hook_id": { "type": "string" },
+        "hook_text": { "type": "string" },
+        "hook_type": { "type": "string" },
+        "curiosity_gap_score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "emotional_trigger_tags": { "type": "array", "items": { "type": "string" } },
+        "power_keyword_tags": { "type": "array", "items": { "type": "string" } },
+        "retention_prediction_score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "confidence_score": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "status": { "type": "string" },
+    "fallback_reason": { "type": ["string", "null"] },
+    "schema_version": { "type": "string" }
+  }
+}
