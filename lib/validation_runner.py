@@ -32,6 +32,7 @@ VALIDATION_TARGETS = {
     "beat_graph": "beat_graph_output",
     "visual_beat_graph": "visual_beat_graph_output",
     "shorts_intelligence": "shorts_intelligence_output",
+    "retention_events": "retention_feature_event_bundle",
     "scenes": "scene_bundle",
     "script": "script_output",
 }
@@ -42,6 +43,7 @@ STAGE_FILENAMES = {
     "plan": "{video_id}_plan.json",
     "scenes": "{video_id}_scenes.json",
     "shorts_intelligence": "{video_id}_shorts_intelligence.json",
+    "retention_events": "{video_id}_retention_events.json",
     "script": "{video_id}_script.json",
 }
 
@@ -60,6 +62,11 @@ def validate_files(stage: str, json_paths: Iterable[str]) -> None:
                     validate_payload("scene_output", scene)
             else:
                 validate_payload("scene_output", payload)
+        elif stage == "retention_events":
+            payload = json.loads(Path(path).read_text(encoding="utf-8"))
+            validate_payload(schema_name, payload)
+            for event in payload.get("events", []):
+                validate_payload("retention_feature_event", event)
         else:
             validate_json_file(schema_name, path)
 
@@ -76,7 +83,7 @@ def validate_all(video_id: str) -> None:
 def main() -> int:
     if len(sys.argv) < 3:
         print(
-            "Usage: python -m lib.validation_runner <hook|plan|research|beat_graph|visual_beat_graph|shorts_intelligence|scenes|script|all> <json_path>...",
+            "Usage: python -m lib.validation_runner <hook|plan|research|beat_graph|visual_beat_graph|shorts_intelligence|retention_events|scenes|script|all> <json_path>...",
             file=sys.stderr,
         )
         return 1

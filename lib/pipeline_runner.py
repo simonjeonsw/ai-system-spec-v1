@@ -27,6 +27,7 @@ from .ops import log_experiment
 from .hook_layer import generate_hook_shadow
 from .beat_shadow import generate_beat_graph_shadow, generate_visual_beat_graph_shadow
 from .shorts_intel import generate_shorts_intelligence_shadow
+from .retention_events import build_feature_snapshot_event
 
 
 SCENE_ENGINE_VERSION = "2.0"
@@ -35,6 +36,7 @@ HOOK_SHADOW_ENABLED_ENV = "HOOK_SHADOW_ENABLED"
 BEAT_SHADOW_ENABLED_ENV = "BEAT_SHADOW_ENABLED"
 VISUAL_BEAT_SHADOW_ENABLED_ENV = "VISUAL_BEAT_SHADOW_ENABLED"
 SHORTS_INTEL_SHADOW_ENABLED_ENV = "SHORTS_INTEL_SHADOW_ENABLED"
+RETENTION_EVENTS_ENABLED_ENV = "RETENTION_EVENTS_ENABLED"
 _CAMERA_ANGLES = [
     "wide shot of a bank vault",
     "close-up of a coin",
@@ -999,6 +1001,7 @@ _STAGE_SCHEMA = {
     "beat_graph": "beat_graph_output",
     "visual_beat_graph": "visual_beat_graph_output",
     "shorts_intelligence": "shorts_intelligence_output",
+    "retention_events": "retention_feature_event_bundle",
     "plan": "planner_output",
     "scenes": "scene_bundle",
     "script": "script_output",
@@ -1078,6 +1081,8 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             save_json("visual_beat_graph", video_id, state["visual_beat_graph"])
         if state.get("shorts_intelligence"):
             save_json("shorts_intelligence", video_id, state["shorts_intelligence"])
+        if state.get("retention_events"):
+            save_json("retention_events", video_id, state["retention_events"])
         if state.get("plan"):
             save_json("plan", video_id, state["plan"])
         if state.get("scenes"):
@@ -1462,6 +1467,38 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             save_json("metadata", video_id, metadata_payload)
         state["metadata"] = metadata_payload
 
+        retention_events_enabled = os.getenv(RETENTION_EVENTS_ENABLED_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
+        if retention_events_enabled:
+            feature_event = build_feature_snapshot_event(
+                video_id=video_id,
+                run_id=run_id,
+                scene_contract_version=SCENE_CONTRACT_VERSION,
+                hook_payload=state.get("hook"),
+                beat_payload=state.get("beat_graph"),
+                visual_beat_payload=state.get("visual_beat_graph"),
+                shorts_payload=state.get("shorts_intelligence"),
+            )
+            retention_events_payload = {"events": [feature_event], "schema_version": "1.0"}
+            save_json("retention_events", video_id, retention_events_payload)
+            state["retention_events"] = retention_events_payload
+            emit_run_log(
+                stage="retention_events",
+                status="success",
+                input_refs={"video_id": video_id, "enabled": True},
+                output_refs={"events": 1, "event_type": feature_event.get("event_type")},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "retention_events", 1),
+            )
+        else:
+            emit_run_log(
+                stage="retention_events",
+                status="skipped",
+                input_refs={"video_id": video_id, "enabled": False},
+                output_refs={"note": "retention events disabled"},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "retention_events", 1),
+            )
+
         semantic_result = validator.semantic_consistency_check(
             metadata_payload=metadata_payload,
             scene_output=scene_output,
@@ -1544,6 +1581,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
         "beat_graph": state.get("beat_graph"),
         "visual_beat_graph": state.get("visual_beat_graph"),
         "shorts_intelligence": state.get("shorts_intelligence"),
+        "retention_events": state.get("retention_events"),
         "plan": plan_payload,
         "scenes": scene_output,
         "script_long": script_payload,
@@ -1605,6 +1643,7 @@ def main() -> int:
             "beat_graph": f"data/{result['video_id']}_beat_graph.json",
             "visual_beat_graph": f"data/{result['video_id']}_visual_beat_graph.json",
             "shorts_intelligence": f"data/{result['video_id']}_shorts_intelligence.json",
+            "retention_events": f"data/{result['video_id']}_retention_events.json",
             "plan": f"data/{result['video_id']}_plan.json",
             "scenes": f"data/{result['video_id']}_scenes.json",
             "script": f"data/{result['video_id']}_script.json",

@@ -59,6 +59,15 @@ Shorts candidate ranking can run from Beat/Visual Beat artifacts in shadow mode 
 - Must preserve full feature vectors per candidate (not score-only storage).
 - Must include `run_id`, `artifact_version`, `scoring_model_version`, `prompt_hash`, and `scene_contract_version`.
 
+## Retention Events Layer (Non-Blocking)
+Retention learning must use event snapshots with deterministic join keys.
+
+**Rules**
+- Emit `feature_snapshot` events from pipeline runs (shadow only).
+- Emit `outcome_snapshot` events from analytics collection.
+- Join key must be deterministic: `video_id + run_id + artifact_type + artifact_version`.
+- Event failures must never block publish or stage completion.
+
 ## Scene Structuring Spec
 Scene structuring converts research output into ordered, self-contained scenes that can be handed off to Script and Visual agents without interpretation.
 
