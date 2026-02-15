@@ -1,0 +1,37 @@
+{
+  "video_id": "d9XXRNC07Ic",
+  "run_id": "run-sample-001",
+  "artifact_version": "1.0",
+  "scoring_model_version": "shorts_intel_v1",
+  "prompt_hash": "sha256-sample",
+  "scene_contract_version": "legacy_scene_v1",
+  "shorts_intelligence": {
+    "version": "1.0",
+    "candidates": [
+      {
+        "candidate_id": "sc-001",
+        "source_beat_ids": ["b-001"],
+        "source_visual_beat_ids": ["vb-001"],
+        "features": {
+          "shock_value_score": 0.72,
+          "emotion_peak_score": 0.64,
+          "standalone_story_score": 0.68,
+          "curiosity_gap_score": 0.74,
+          "energy_curve_index": 0.66,
+          "visual_intensity_score": 0.7,
+          "drop_risk_prediction": 0.28,
+          "knowledge_density_score": 0.52,
+          "clip_independence_score": 0.69,
+          "opening_velocity_score": 0.9,
+          "pattern_interrupt_density": 0.71,
+          "loop_potential_score": 0.73,
+          "cognitive_load_index": 0.43
+        },
+        "composite_score": 0.71,
+        "shorts_candidate_flag": true,
+        "shorts_rank_priority": 1
+      }
+    ]
+  },
+  "schema_version": "1.0"
+}
