@@ -2,6 +2,35 @@
 
 Schemas define the canonical inputs and outputs for each module.
 
+
+## Hook Output Schema (v1.0)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HookOutput",
+  "type": "object",
+  "required": [
+    "video_id",
+    "artifact_version",
+    "scoring_model_version",
+    "prompt_hash",
+    "hook_hypothesis",
+    "status",
+    "schema_version"
+  ],
+  "properties": {
+    "video_id": { "type": "string" },
+    "artifact_version": { "type": "string" },
+    "scoring_model_version": { "type": "string" },
+    "prompt_hash": { "type": "string" },
+    "hook_hypothesis": { "type": "object" },
+    "status": { "type": "string" },
+    "fallback_reason": { "type": ["string", "null"] },
+    "schema_version": { "type": "string" }
+  }
+}
+```
+
 ## Planner Output Schema (v1.0)
 ```json
 {
@@ -175,6 +204,24 @@ Schemas define the canonical inputs and outputs for each module.
     "narration_prompt": { "type": "string" },
     "transition_note": { "type": "string" },
     "schema_version": { "type": "string" }
+  }
+}
+```
+
+
+## Scene Bundle Schema (Legacy Envelope, v1.0)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SceneBundle",
+  "type": "object",
+  "required": ["scenes"],
+  "properties": {
+    "scenes": {"type": "array", "items": {"type": "object"}},
+    "scene_contract_version": {"type": "string"},
+    "scene_engine_version": {"type": "string"},
+    "style_profile": {"type": "string"},
+    "source_script_hash": {"type": "string"}
   }
 }
 ```

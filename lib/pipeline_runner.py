@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import signal
+import os
 import time
 import re
 from pathlib import Path
@@ -23,9 +24,12 @@ from .schema_validator import validate_payload
 from .validation_runner import validate_all
 from .validator import ScriptValidator
 from .ops import log_experiment
+from .hook_layer import generate_hook_shadow
 
 
 SCENE_ENGINE_VERSION = "2.0"
+SCENE_CONTRACT_VERSION = "legacy_scene_v1"
+HOOK_SHADOW_ENABLED_ENV = "HOOK_SHADOW_ENABLED"
 _CAMERA_ANGLES = [
     "wide shot of a bank vault",
     "close-up of a coin",
@@ -985,9 +989,10 @@ def _run_stage(
 
 
 _STAGE_SCHEMA = {
+    "hook": "hook_output",
     "research": "research_output",
     "plan": "planner_output",
-    "scenes": "scene_output",
+    "scenes": "scene_bundle",
     "script": "script_output",
     "script_long": "script_output",
     "script_shorts": "script_output",
@@ -1008,6 +1013,13 @@ def _load_stage_payload(stage: str, video_id: str) -> Optional[Dict[str, Any]]:
         schema_name = _STAGE_SCHEMA.get(stage)
         if schema_name:
             if stage == "scenes":
+                payload.setdefault("scene_contract_version", SCENE_CONTRACT_VERSION)
+                try:
+                    validate_payload(schema_name, payload)
+                except Exception:
+                    print(f"⚠️ Schema validation failed for {stage}. Regenerating.")
+                    path.unlink(missing_ok=True)
+                    return None
                 scenes = payload.get("scenes", [])
                 if not scenes:
                     print(f"⚠️ Invalid scene payload for {stage}. Regenerating.")
@@ -1015,7 +1027,7 @@ def _load_stage_payload(stage: str, video_id: str) -> Optional[Dict[str, Any]]:
                     return None
                 try:
                     for scene in scenes:
-                        validate_payload(schema_name, scene)
+                        validate_payload("scene_output", scene)
                 except Exception:
                     print(f"⚠️ Schema validation failed for {stage}. Regenerating.")
                     path.unlink(missing_ok=True)
@@ -1048,6 +1060,8 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     state: Dict[str, Any] = {}
 
     def _checkpoint_state() -> None:
+        if state.get("hook"):
+            save_json("hook", video_id, state["hook"])
         if state.get("research"):
             save_json("research", video_id, state["research"])
         if state.get("plan"):
@@ -1070,6 +1084,33 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     signal.signal(signal.SIGTERM, _handle_signal)
     try:
         script_updated = False
+        hook_shadow_enabled = os.getenv(HOOK_SHADOW_ENABLED_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
+        hook_payload: Dict[str, Any] | None = None
+        if hook_shadow_enabled:
+            cached_hook = None if refresh else _load_stage_payload("hook", video_id)
+            if cached_hook:
+                hook_payload = cached_hook
+            else:
+                hook_payload = generate_hook_shadow(video_id)
+                save_json("hook", video_id, hook_payload)
+            state["hook"] = hook_payload
+            emit_run_log(
+                stage="hook_shadow",
+                status="success" if hook_payload.get("status") == "ok" else "warning",
+                input_refs={"video_id": video_id, "enabled": True},
+                output_refs={"status": hook_payload.get("status"), "fallback_reason": hook_payload.get("fallback_reason")},
+                metrics=build_metrics(cache_hit=bool(cached_hook)),
+                run_id=_log_run_id(run_id, "hook_shadow", 1),
+            )
+        else:
+            emit_run_log(
+                stage="hook_shadow",
+                status="skipped",
+                input_refs={"video_id": video_id, "enabled": False},
+                output_refs={"note": "hook shadow disabled"},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "hook_shadow", 1),
+            )
         cached_research = None if refresh else _load_stage_payload("research", video_id)
         if cached_research:
             research_payload = cached_research
@@ -1287,11 +1328,14 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
         else:
             scene_output = _build_scene_output_from_script(script_payload, research_payload)
             scene_output["scene_engine_version"] = SCENE_ENGINE_VERSION
+            scene_output["scene_contract_version"] = SCENE_CONTRACT_VERSION
             scene_output["style_profile"] = _load_visual_style_config().get("active_style", "isometric_3d")
             scene_output["source_script_hash"] = _scene_hash(script_payload, scene_output["style_profile"])
             scene_output = _ensure_scene_granularity(scene_output, script_payload, research_payload, min_scenes=10)
+            scene_output.setdefault("scene_contract_version", SCENE_CONTRACT_VERSION)
             save_json("scenes", video_id, scene_output)
             save_markdown("scenes", video_id, _render_scenes_markdown(scene_output))
+        scene_output.setdefault("scene_contract_version", SCENE_CONTRACT_VERSION)
         state["scenes"] = scene_output
         supabase.table("video_scenes").upsert(
             {
@@ -1394,6 +1438,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     return {
         "run_id": run_id,
         "video_id": video_id,
+        "hook": state.get("hook"),
         "research": research_payload,
         "plan": plan_payload,
         "scenes": scene_output,
@@ -1451,6 +1496,7 @@ def main() -> int:
     manifest = {
         "video_id": result["video_id"],
         "files": {
+            "hook": f"data/{result['video_id']}_hook.json",
             "research": f"data/{result['video_id']}_research.json",
             "plan": f"data/{result['video_id']}_plan.json",
             "scenes": f"data/{result['video_id']}_scenes.json",
