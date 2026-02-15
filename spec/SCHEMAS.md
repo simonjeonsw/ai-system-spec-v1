@@ -84,6 +84,7 @@ Schemas define the canonical inputs and outputs for each module.
     "video_id", "run_id", "artifact_type", "artifact_version", "event_type",
     "event_window", "scoring_model_version", "prompt_hash", "scene_contract_version",
     "feature_snapshot", "outcome_metrics", "created_at_utc", "event_key", "schema_version"
+    // optional: lineage_source = db|local|none
   ]
 }
 ```

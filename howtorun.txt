@@ -25,11 +25,13 @@ python -m lib.validation_runner learning_gate spec/samples/learning_gate_output_
 python -m lib.validation_runner scenes spec/samples/scene_output_sample.json
 python -m lib.validation_runner script spec/samples/script_output_sample.json
 python -m lib.validation_runner all --url <youtube_url_or_id>
+# profile-aware: expected shadow files are derived from data/<video_id>_pipeline.json (fallback: env profile/toggles)
 
 7. End-to-end runner (pipeline_runner.py)
 python -m lib.pipeline_runner --url <youtube_url_or_id> --validate
 
 8. Analytics collection + outcome snapshot + learning gate
+# DB-first lineage lookup: retention_events table is queried first, local file fallback if DB unavailable
 python -m lib.analytics_collector <video_id> [start_date] [end_date]
 python -m lib.analytics_collector path/to/video_ids.txt [start_date] [end_date]
 

@@ -46,3 +46,8 @@ If tables are not present, collector continues non-blocking and prints warning l
 ## Idempotency keys
 - `retention_events.event_key`: unique key for replay-safe outcome/feature writes.
 - `learning_gate_decisions.decision_key`: unique key for replay-safe decision writes.
+
+
+## Distributed lineage note
+- Analytics outcome generation resolves `feature_snapshot` with DB-first lookup and local fallback.
+- Local artifacts include `lineage_source` (`db|local|none`) for auditability.

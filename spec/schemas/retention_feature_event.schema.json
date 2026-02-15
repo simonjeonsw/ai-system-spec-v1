@@ -129,6 +129,14 @@
     },
     "event_key": {
       "type": "string"
+    },
+    "lineage_source": {
+      "type": "string",
+      "enum": [
+        "db",
+        "local",
+        "none"
+      ]
     }
   }
 }

@@ -31,7 +31,8 @@
       },
       "created_at_utc": "2026-01-01T00:00:00Z",
       "schema_version": "1.0",
-      "event_key": "sample-event-key-1"
+      "event_key": "sample-event-key-1",
+      "lineage_source": "db"
     }
   ],
   "schema_version": "1.0"

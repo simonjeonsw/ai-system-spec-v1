@@ -1826,6 +1826,10 @@ def main() -> int:
     manifest_path = Path(__file__).resolve().parent.parent / "data" / f"{result['video_id']}_pipeline.json"
     manifest = {
         "video_id": result["video_id"],
+        "run_id": result.get("run_id"),
+        "pipeline_profile": result.get("pipeline_profile"),
+        "shadow_toggles": result.get("shadow_toggles", {}),
+        "selected_hook_stage": result.get("selected_hook_stage"),
         "files": {
             "hook": f"data/{result['video_id']}_hook.json",
             "hook_seed": f"data/{result['video_id']}_hook_seed.json",

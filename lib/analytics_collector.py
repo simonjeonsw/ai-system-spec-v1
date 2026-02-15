@@ -26,6 +26,42 @@ ANALYTICS_SCOPES = [
 ]
 
 
+def _load_latest_feature_snapshot(video_id: str) -> tuple[Dict[str, Any] | None, str]:
+    """Resolve latest feature snapshot with DB-first strategy, then local fallback."""
+    try:
+        response = (
+            supabase.table("retention_events")
+            .select("payload")
+            .eq("video_id", video_id)
+            .eq("event_type", "feature_snapshot")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = response.data or []
+        if rows and isinstance(rows[0], dict):
+            payload = rows[0].get("payload")
+            if isinstance(payload, dict):
+                return payload, "db"
+    except Exception:
+        pass
+
+    data_dir = Path(__file__).resolve().parent.parent / "data"
+    path = data_dir / f"{video_id}_retention_events.json"
+    payload: Dict[str, Any] = {"events": [], "schema_version": "1.0"}
+    if path.exists():
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            payload = {"events": [], "schema_version": "1.0"}
+
+    events = payload.get("events", []) if isinstance(payload, dict) else []
+    for event in reversed(events):
+        if isinstance(event, dict) and event.get("event_type") == "feature_snapshot":
+            return event, "local"
+    return None, "none"
+
+
 def build_analytics_client() -> Any:
     load_dotenv()
     client_id = os.getenv("GOOGLE_CLIENT_ID")
@@ -118,12 +154,7 @@ def append_retention_outcome_event(*, video_id: str, metrics: Dict[str, Any], st
         except Exception:
             payload = {"events": [], "schema_version": "1.0"}
 
-    events = payload.get("events", []) if isinstance(payload, dict) else []
-    latest_feature = None
-    for event in reversed(events):
-        if isinstance(event, dict) and event.get("event_type") == "feature_snapshot":
-            latest_feature = event
-            break
+    latest_feature, lineage_source = _load_latest_feature_snapshot(video_id)
 
     run_id = str((latest_feature or {}).get("run_id") or f"analytics-{video_id}")
     scene_contract_version = str((latest_feature or {}).get("scene_contract_version") or "legacy_scene_v1")
@@ -153,6 +184,7 @@ def append_retention_outcome_event(*, video_id: str, metrics: Dict[str, Any], st
         ]
     )
     event["event_key"] = hashlib.sha256(event_key_seed.encode("utf-8")).hexdigest()
+    event["lineage_source"] = lineage_source
 
     payload.setdefault("events", [])
     payload["events"].append(event)

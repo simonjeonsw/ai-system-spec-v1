@@ -41,7 +41,6 @@ CREATE INDEX IF NOT EXISTS idx_retention_events_video_id_created_at
 CREATE INDEX IF NOT EXISTS idx_retention_events_join_key
   ON public.retention_events(video_id, run_id, artifact_type, artifact_version, event_type, created_at DESC);
 
-
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_retention_events_event_key
   ON public.retention_events(event_key)
   WHERE event_key IS NOT NULL;
