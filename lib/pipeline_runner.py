@@ -25,11 +25,14 @@ from .validation_runner import validate_all
 from .validator import ScriptValidator
 from .ops import log_experiment
 from .hook_layer import generate_hook_shadow
+from .beat_shadow import generate_beat_graph_shadow, generate_visual_beat_graph_shadow
 
 
 SCENE_ENGINE_VERSION = "2.0"
 SCENE_CONTRACT_VERSION = "legacy_scene_v1"
 HOOK_SHADOW_ENABLED_ENV = "HOOK_SHADOW_ENABLED"
+BEAT_SHADOW_ENABLED_ENV = "BEAT_SHADOW_ENABLED"
+VISUAL_BEAT_SHADOW_ENABLED_ENV = "VISUAL_BEAT_SHADOW_ENABLED"
 _CAMERA_ANGLES = [
     "wide shot of a bank vault",
     "close-up of a coin",
@@ -991,6 +994,8 @@ def _run_stage(
 _STAGE_SCHEMA = {
     "hook": "hook_output",
     "research": "research_output",
+    "beat_graph": "beat_graph_output",
+    "visual_beat_graph": "visual_beat_graph_output",
     "plan": "planner_output",
     "scenes": "scene_bundle",
     "script": "script_output",
@@ -1064,6 +1069,10 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             save_json("hook", video_id, state["hook"])
         if state.get("research"):
             save_json("research", video_id, state["research"])
+        if state.get("beat_graph"):
+            save_json("beat_graph", video_id, state["beat_graph"])
+        if state.get("visual_beat_graph"):
+            save_json("visual_beat_graph", video_id, state["visual_beat_graph"])
         if state.get("plan"):
             save_json("plan", video_id, state["plan"])
         if state.get("scenes"):
@@ -1227,6 +1236,61 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             script_updated = True
         state["script_shorts"] = shorts_payload
         save_markdown("script", video_id, _render_script_markdown(script_payload, shorts_payload))
+        beat_shadow_enabled = os.getenv(BEAT_SHADOW_ENABLED_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
+        visual_beat_shadow_enabled = os.getenv(VISUAL_BEAT_SHADOW_ENABLED_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
+        beat_payload: Dict[str, Any] | None = None
+        visual_beat_payload: Dict[str, Any] | None = None
+        if beat_shadow_enabled:
+            cached_beat = None if refresh else _load_stage_payload("beat_graph", video_id)
+            if cached_beat:
+                beat_payload = cached_beat
+            else:
+                beat_payload = generate_beat_graph_shadow(video_id, script_payload, run_id)
+                save_json("beat_graph", video_id, beat_payload)
+            state["beat_graph"] = beat_payload
+            emit_run_log(
+                stage="beat_shadow",
+                status="success",
+                input_refs={"video_id": video_id, "enabled": True},
+                output_refs={"beats": len((beat_payload.get("beat_graph") or {}).get("beats", []))},
+                metrics=build_metrics(cache_hit=bool(cached_beat)),
+                run_id=_log_run_id(run_id, "beat_shadow", 1),
+            )
+        else:
+            emit_run_log(
+                stage="beat_shadow",
+                status="skipped",
+                input_refs={"video_id": video_id, "enabled": False},
+                output_refs={"note": "beat shadow disabled"},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "beat_shadow", 1),
+            )
+
+        if visual_beat_shadow_enabled and beat_payload:
+            cached_visual_beat = None if refresh else _load_stage_payload("visual_beat_graph", video_id)
+            if cached_visual_beat:
+                visual_beat_payload = cached_visual_beat
+            else:
+                visual_beat_payload = generate_visual_beat_graph_shadow(video_id, beat_payload, run_id)
+                save_json("visual_beat_graph", video_id, visual_beat_payload)
+            state["visual_beat_graph"] = visual_beat_payload
+            emit_run_log(
+                stage="visual_beat_shadow",
+                status="success",
+                input_refs={"video_id": video_id, "enabled": True},
+                output_refs={"visual_beats": len((visual_beat_payload.get("visual_beat_graph") or {}).get("visual_beats", []))},
+                metrics=build_metrics(cache_hit=bool(cached_visual_beat)),
+                run_id=_log_run_id(run_id, "visual_beat_shadow", 1),
+            )
+        else:
+            emit_run_log(
+                stage="visual_beat_shadow",
+                status="skipped",
+                input_refs={"video_id": video_id, "enabled": visual_beat_shadow_enabled},
+                output_refs={"note": "visual beat shadow disabled or beat shadow unavailable"},
+                metrics=build_metrics(cache_hit=False),
+                run_id=_log_run_id(run_id, "visual_beat_shadow", 1),
+            )
         supabase.table("video_scripts").upsert(
             {
                 "video_id": video_id,
@@ -1440,6 +1504,8 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
         "video_id": video_id,
         "hook": state.get("hook"),
         "research": research_payload,
+        "beat_graph": state.get("beat_graph"),
+        "visual_beat_graph": state.get("visual_beat_graph"),
         "plan": plan_payload,
         "scenes": scene_output,
         "script_long": script_payload,
@@ -1498,6 +1564,8 @@ def main() -> int:
         "files": {
             "hook": f"data/{result['video_id']}_hook.json",
             "research": f"data/{result['video_id']}_research.json",
+            "beat_graph": f"data/{result['video_id']}_beat_graph.json",
+            "visual_beat_graph": f"data/{result['video_id']}_visual_beat_graph.json",
             "plan": f"data/{result['video_id']}_plan.json",
             "scenes": f"data/{result['video_id']}_scenes.json",
             "script": f"data/{result['video_id']}_script.json",

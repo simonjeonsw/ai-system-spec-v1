@@ -31,6 +31,32 @@ Schemas define the canonical inputs and outputs for each module.
 }
 ```
 
+## Beat Graph Output Schema (v1.0)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BeatGraphOutput",
+  "type": "object",
+  "required": [
+    "video_id", "run_id", "artifact_version", "scoring_model_version",
+    "prompt_hash", "scene_contract_version", "beat_graph", "schema_version"
+  ]
+}
+```
+
+## Visual Beat Graph Output Schema (v1.0)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VisualBeatGraphOutput",
+  "type": "object",
+  "required": [
+    "video_id", "run_id", "artifact_version", "scoring_model_version",
+    "prompt_hash", "scene_contract_version", "visual_beat_graph", "schema_version"
+  ]
+}
+```
+
 ## Planner Output Schema (v1.0)
 ```json
 {

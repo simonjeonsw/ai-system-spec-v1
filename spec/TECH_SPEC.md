@@ -43,6 +43,14 @@ A pre-research hook layer can run in shadow mode for retention experiments.
 - If hook generation fails, the pipeline continues with legacy Research flow.
 - Hook artifacts must include `artifact_version`, `scoring_model_version`, `prompt_hash`, and `status`.
 
+## Beat / Visual Beat Shadow Layers (Non-Blocking)
+Beat and Visual Beat generation can run in shadow mode without changing legacy scene outputs.
+
+**Rules**
+- Both layers must be feature-flagged and non-blocking.
+- Beat artifacts must include `run_id`, `artifact_version`, `scoring_model_version`, `prompt_hash`, and `scene_contract_version`.
+- Visual Beat artifacts must preserve `parent_beat_id` lineage.
+
 ## Scene Structuring Spec
 Scene structuring converts research output into ordered, self-contained scenes that can be handed off to Script and Visual agents without interpretation.
 
