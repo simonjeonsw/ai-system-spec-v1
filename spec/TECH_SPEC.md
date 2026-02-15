@@ -68,6 +68,14 @@ Retention learning must use event snapshots with deterministic join keys.
 - Join key must be deterministic: `video_id + run_id + artifact_type + artifact_version`.
 - Event failures must never block publish or stage completion.
 
+## Learning Gate Policy (Non-Blocking)
+Learning updates should be gated by consecutive outcome quality checks.
+
+**Rules**
+- Default policy: require at least 2 consecutive outcome snapshots meeting baselines.
+- Decisions: `promote` | `hold` | `rework`.
+- Learning gate failures must not block analytics ingestion.
+
 ## Scene Structuring Spec
 Scene structuring converts research output into ordered, self-contained scenes that can be handed off to Script and Visual agents without interpretation.
 

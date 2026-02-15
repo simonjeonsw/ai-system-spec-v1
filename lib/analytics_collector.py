@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from .run_logger import build_metrics, emit_run_log
 from .supabase_client import supabase
 from .retention_events import build_outcome_snapshot_event
+from .learning_gate import evaluate_learning_gate
 
 
 ANALYTICS_SCOPES = [
@@ -150,7 +151,8 @@ def collect_metrics_for_videos(
             metrics=metrics,
         )
         retention_event = append_retention_outcome_event(video_id=video_id, metrics=metrics)
-        results.append({"metrics": metrics, "snapshot": snapshot, "retention_event": retention_event})
+        learning_gate = evaluate_learning_gate(video_id=video_id)
+        results.append({"metrics": metrics, "snapshot": snapshot, "retention_event": retention_event, "learning_gate": learning_gate})
     return {"start_date": start_date, "end_date": end_date, "results": results}
 
 
@@ -192,7 +194,8 @@ def main() -> int:
                 metrics=metrics,
             )
             retention_event = append_retention_outcome_event(video_id=video_id, metrics=metrics)
-            payload = {"metrics": metrics, "snapshot": snapshot, "retention_event": retention_event}
+            learning_gate = evaluate_learning_gate(video_id=video_id)
+            payload = {"metrics": metrics, "snapshot": snapshot, "retention_event": retention_event, "learning_gate": learning_gate}
             output_refs = {"metrics": metrics}
         emit_run_log(
             stage="analytics",

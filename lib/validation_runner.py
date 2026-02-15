@@ -33,6 +33,7 @@ VALIDATION_TARGETS = {
     "visual_beat_graph": "visual_beat_graph_output",
     "shorts_intelligence": "shorts_intelligence_output",
     "retention_events": "retention_feature_event_bundle",
+    "learning_gate": "learning_gate_output",
     "scenes": "scene_bundle",
     "script": "script_output",
 }
@@ -44,6 +45,7 @@ STAGE_FILENAMES = {
     "scenes": "{video_id}_scenes.json",
     "shorts_intelligence": "{video_id}_shorts_intelligence.json",
     "retention_events": "{video_id}_retention_events.json",
+    "learning_gate": "{video_id}_learning_gate.json",
     "script": "{video_id}_script.json",
 }
 
@@ -83,7 +85,7 @@ def validate_all(video_id: str) -> None:
 def main() -> int:
     if len(sys.argv) < 3:
         print(
-            "Usage: python -m lib.validation_runner <hook|plan|research|beat_graph|visual_beat_graph|shorts_intelligence|retention_events|scenes|script|all> <json_path>...",
+            "Usage: python -m lib.validation_runner <hook|plan|research|beat_graph|visual_beat_graph|shorts_intelligence|retention_events|learning_gate|scenes|script|all> <json_path>...",
             file=sys.stderr,
         )
         return 1
