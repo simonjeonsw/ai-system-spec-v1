@@ -106,19 +106,24 @@ def build_outcome_snapshot_event(
     ctr: float | None,
     avd: float | None,
     retention_curve_snapshots: List[Dict[str, Any]] | None = None,
+    artifact_type: str | None = None,
+    artifact_version: str | None = None,
+    scoring_model_version: str | None = None,
+    prompt_hash: str | None = None,
+    feature_snapshot: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    prompt_hash = hashlib.sha256(f"outcome::{video_id}::{run_id}".encode("utf-8")).hexdigest()
+    resolved_prompt_hash = prompt_hash or hashlib.sha256(f"outcome::{video_id}::{run_id}".encode("utf-8")).hexdigest()
     return {
         "video_id": video_id,
         "run_id": run_id,
-        "artifact_type": "retention_feature_events",
-        "artifact_version": RETENTION_EVENT_ARTIFACT_VERSION,
+        "artifact_type": artifact_type or "retention_feature_events",
+        "artifact_version": artifact_version or RETENTION_EVENT_ARTIFACT_VERSION,
         "event_type": RETENTION_EVENT_TYPE_OUTCOME_SNAPSHOT,
         "event_window": "d_plus_3",
-        "scoring_model_version": "retention_features_v1",
-        "prompt_hash": prompt_hash,
+        "scoring_model_version": scoring_model_version or "retention_features_v1",
+        "prompt_hash": resolved_prompt_hash,
         "scene_contract_version": scene_contract_version,
-        "feature_snapshot": {
+        "feature_snapshot": feature_snapshot or {
             "hook_type": "unknown",
             "beat_density": 0.0,
             "visual_beat_frequency": 0.0,

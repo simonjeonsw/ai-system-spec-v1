@@ -17,8 +17,16 @@
       "ctr": 4.8,
       "avd": 39.0,
       "meets_publish": false,
-      "meets_rework": false
+      "meets_rework": false,
+      "run_id": "run-d9XXRNC07Ic",
+      "artifact_type": "retention_feature_events",
+      "artifact_version": "1.0"
     }
   ],
-  "schema_version": "1.0"
+  "schema_version": "1.1",
+  "lineage": {
+    "run_id": "run-d9XXRNC07Ic",
+    "artifact_type": "retention_feature_events",
+    "artifact_version": "1.0"
+  }
 }

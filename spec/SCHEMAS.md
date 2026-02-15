@@ -98,7 +98,7 @@ Schemas define the canonical inputs and outputs for each module.
 }
 ```
 
-## Learning Gate Output Schema (v1.0)
+## Learning Gate Output Schema (v1.1)
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
@@ -106,7 +106,7 @@ Schemas define the canonical inputs and outputs for each module.
   "type": "object",
   "required": [
     "video_id", "decision", "action", "policy", "window_size",
-    "evaluated_outcomes", "signals", "schema_version"
+    "evaluated_outcomes", "signals", "lineage", "schema_version"
   ]
 }
 ```

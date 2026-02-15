@@ -61,6 +61,9 @@ def evaluate_learning_gate(
         signals.append(
             {
                 "created_at_utc": event.get("created_at_utc"),
+                "run_id": event.get("run_id"),
+                "artifact_type": event.get("artifact_type"),
+                "artifact_version": event.get("artifact_version"),
                 "ctr": ctr,
                 "avd": avd,
                 "meets_publish": bool(ctr is not None and avd is not None and ctr >= ctr_baseline and avd >= avd_baseline),
@@ -80,6 +83,7 @@ def evaluate_learning_gate(
         decision = "rework"
         action = "block_learning_update_and_revise_assets"
 
+    lineage_source = signals[-1] if signals else {}
     payload = {
         "video_id": video_id,
         "decision": decision,
@@ -94,7 +98,12 @@ def evaluate_learning_gate(
         "window_size": min_consecutive,
         "evaluated_outcomes": len(signals),
         "signals": signals,
-        "schema_version": "1.0",
+        "lineage": {
+            "run_id": lineage_source.get("run_id"),
+            "artifact_type": lineage_source.get("artifact_type"),
+            "artifact_version": lineage_source.get("artifact_version"),
+        },
+        "schema_version": "1.1",
     }
 
     data_dir = Path(__file__).resolve().parent.parent / "data"

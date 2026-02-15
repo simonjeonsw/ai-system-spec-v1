@@ -12,6 +12,7 @@
   - `hook_refined_path`
 - `retention_events` table (append-only event store)
 - `learning_gates` table (latest decision per `video_id`)
+- `learning_gate_decisions` table (append-only decision history with lineage join keys)
 
 ## Apply commands
 
@@ -29,12 +30,14 @@ psql "$SUPABASE_DB_URL" -f sql/2026-02-15_shadow_learning_schema.sql
 ```bash
 psql "$SUPABASE_DB_URL" -c "\d+ public.retention_events"
 psql "$SUPABASE_DB_URL" -c "\d+ public.learning_gates"
+psql "$SUPABASE_DB_URL" -c "\d+ public.learning_gate_decisions"
 psql "$SUPABASE_DB_URL" -c "\d+ public.video_uploads"
 ```
 
 ## Runtime note
 `lib/analytics_collector.py` now attempts to persist:
 - outcome snapshot events into `public.retention_events`
-- learning gate outputs into `public.learning_gates`
+- learning gate outputs into `public.learning_gates` (latest status)
+- learning gate decision history into `public.learning_gate_decisions` (append-only)
 
 If tables are not present, collector continues non-blocking and prints warning lines.

@@ -108,15 +108,6 @@ def store_metrics_snapshot(
 
 
 def append_retention_outcome_event(*, video_id: str, metrics: Dict[str, Any]) -> Dict[str, Any]:
-    run_id = f"analytics-{video_id}"
-    event = build_outcome_snapshot_event(
-        video_id=video_id,
-        run_id=run_id,
-        scene_contract_version="legacy_scene_v1",
-        ctr=metrics.get("impressions_ctr"),
-        avd=metrics.get("average_view_duration"),
-        retention_curve_snapshots=[],
-    )
     data_dir = Path(__file__).resolve().parent.parent / "data"
     path = data_dir / f"{video_id}_retention_events.json"
     payload: Dict[str, Any] = {"events": [], "schema_version": "1.0"}
@@ -125,6 +116,29 @@ def append_retention_outcome_event(*, video_id: str, metrics: Dict[str, Any]) ->
             payload = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             payload = {"events": [], "schema_version": "1.0"}
+
+    events = payload.get("events", []) if isinstance(payload, dict) else []
+    latest_feature = None
+    for event in reversed(events):
+        if isinstance(event, dict) and event.get("event_type") == "feature_snapshot":
+            latest_feature = event
+            break
+
+    run_id = str((latest_feature or {}).get("run_id") or f"analytics-{video_id}")
+    scene_contract_version = str((latest_feature or {}).get("scene_contract_version") or "legacy_scene_v1")
+    event = build_outcome_snapshot_event(
+        video_id=video_id,
+        run_id=run_id,
+        scene_contract_version=scene_contract_version,
+        ctr=metrics.get("impressions_ctr"),
+        avd=metrics.get("average_view_duration"),
+        retention_curve_snapshots=[],
+        artifact_type=(latest_feature or {}).get("artifact_type"),
+        artifact_version=(latest_feature or {}).get("artifact_version"),
+        scoring_model_version=(latest_feature or {}).get("scoring_model_version"),
+        prompt_hash=(latest_feature or {}).get("prompt_hash"),
+        feature_snapshot=(latest_feature or {}).get("feature_snapshot"),
+    )
     payload.setdefault("events", [])
     payload["events"].append(event)
     payload["schema_version"] = "1.0"
@@ -137,13 +151,39 @@ def persist_learning_artifacts(*, video_id: str, retention_event: Dict[str, Any]
         supabase.table("retention_events").insert(
             {
                 "video_id": video_id,
+                "run_id": retention_event.get("run_id"),
+                "artifact_type": retention_event.get("artifact_type"),
+                "artifact_version": retention_event.get("artifact_version"),
                 "event_type": retention_event.get("event_type"),
                 "event_window": retention_event.get("event_window"),
+                "scoring_model_version": retention_event.get("scoring_model_version"),
+                "prompt_hash": retention_event.get("prompt_hash"),
+                "scene_contract_version": retention_event.get("scene_contract_version"),
                 "payload": retention_event,
             }
         ).execute()
     except Exception as exc:
         print(f"⚠️ retention_events insert skipped: {exc}", file=sys.stderr)
+
+    lineage = learning_gate.get("lineage", {}) if isinstance(learning_gate, dict) else {}
+
+    try:
+        supabase.table("learning_gate_decisions").insert(
+            {
+                "video_id": video_id,
+                "run_id": lineage.get("run_id"),
+                "artifact_type": lineage.get("artifact_type"),
+                "artifact_version": lineage.get("artifact_version"),
+                "decision": learning_gate.get("decision"),
+                "action": learning_gate.get("action"),
+                "policy": learning_gate.get("policy"),
+                "window_size": learning_gate.get("window_size"),
+                "evaluated_outcomes": learning_gate.get("evaluated_outcomes"),
+                "payload": learning_gate,
+            }
+        ).execute()
+    except Exception as exc:
+        print(f"⚠️ learning_gate_decisions insert skipped: {exc}", file=sys.stderr)
 
     try:
         supabase.table("learning_gates").upsert(

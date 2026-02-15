@@ -10,39 +10,142 @@
     "window_size",
     "evaluated_outcomes",
     "signals",
+    "lineage",
     "schema_version"
   ],
   "properties": {
-    "video_id": { "type": "string" },
-    "decision": { "type": "string" },
-    "action": { "type": "string" },
+    "video_id": {
+      "type": "string"
+    },
+    "decision": {
+      "type": "string"
+    },
+    "action": {
+      "type": "string"
+    },
     "policy": {
       "type": "object",
-      "required": ["ctr_baseline", "avd_baseline", "rework_ctr_floor", "rework_avd_floor", "min_consecutive"],
+      "required": [
+        "ctr_baseline",
+        "avd_baseline",
+        "rework_ctr_floor",
+        "rework_avd_floor",
+        "min_consecutive"
+      ],
       "properties": {
-        "ctr_baseline": { "type": "number" },
-        "avd_baseline": { "type": "number" },
-        "rework_ctr_floor": { "type": "number" },
-        "rework_avd_floor": { "type": "number" },
-        "min_consecutive": { "type": "integer" }
+        "ctr_baseline": {
+          "type": "number"
+        },
+        "avd_baseline": {
+          "type": "number"
+        },
+        "rework_ctr_floor": {
+          "type": "number"
+        },
+        "rework_avd_floor": {
+          "type": "number"
+        },
+        "min_consecutive": {
+          "type": "integer"
+        }
       }
     },
-    "window_size": { "type": "integer" },
-    "evaluated_outcomes": { "type": "integer" },
+    "window_size": {
+      "type": "integer"
+    },
+    "evaluated_outcomes": {
+      "type": "integer"
+    },
     "signals": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["created_at_utc", "ctr", "avd", "meets_publish", "meets_rework"],
+        "required": [
+          "created_at_utc",
+          "run_id",
+          "artifact_type",
+          "artifact_version",
+          "ctr",
+          "avd",
+          "meets_publish",
+          "meets_rework"
+        ],
         "properties": {
-          "created_at_utc": { "type": ["string", "null"] },
-          "ctr": { "type": ["number", "null"] },
-          "avd": { "type": ["number", "null"] },
-          "meets_publish": { "type": "boolean" },
-          "meets_rework": { "type": "boolean" }
+          "created_at_utc": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ctr": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "avd": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "meets_publish": {
+            "type": "boolean"
+          },
+          "meets_rework": {
+            "type": "boolean"
+          },
+          "run_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "artifact_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "artifact_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
         }
       }
     },
-    "schema_version": { "type": "string" }
+    "schema_version": {
+      "type": "string"
+    },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "artifact_type",
+        "artifact_version"
+      ],
+      "properties": {
+        "run_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "artifact_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "artifact_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
   }
 }
