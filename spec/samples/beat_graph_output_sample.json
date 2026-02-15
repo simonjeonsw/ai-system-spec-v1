@@ -1,0 +1,28 @@
+{
+  "video_id": "d9XXRNC07Ic",
+  "run_id": "run-sample-001",
+  "artifact_version": "1.0",
+  "scoring_model_version": "beat_shadow_v1",
+  "prompt_hash": "abc",
+  "scene_contract_version": "legacy_scene_v1",
+  "beat_graph": {
+    "version": "1.0",
+    "beats": [
+      {
+        "beat_id": "b-001",
+        "sequence_index": 1,
+        "narrative_role_tag": "hook",
+        "script_span_ref": {"start_char": 0, "end_char": 120},
+        "emotion_peak_score": 0.6,
+        "shock_value_score": 0.7,
+        "curiosity_gap_score": 0.8,
+        "info_density_score": 0.5,
+        "energy_curve_index": 0.7,
+        "drop_risk_prediction": 0.3,
+        "shorts_candidate_flag": true,
+        "shorts_rank_priority": 1
+      }
+    ]
+  },
+  "schema_version": "1.0"
+}
