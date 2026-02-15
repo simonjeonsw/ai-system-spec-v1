@@ -47,6 +47,7 @@ Scene structuring converts research output into ordered, self-contained scenes t
   - `visual_prompt` (string): Visual guidance for the scene.
   - `narration_prompt` (string): Narration guidance for the scene.
   - `transition_note` (string): How this scene connects to the next.
+  - `scene_contract_version` (string, bundle-level): Frozen legacy envelope contract identifier (e.g., `legacy_scene_v1`).
 - **Optional fields**
   - `start_time` (string or number): Start timestamp (e.g., `"00:00:12"` or `12.0` seconds).
   - `end_time` (string or number): End timestamp (e.g., `"00:00:32"` or `32.0` seconds).
@@ -60,6 +61,7 @@ Scene structuring converts research output into ordered, self-contained scenes t
 - Claims must have at least one evidence source and a source_refs entry.
 - Every evidence_sources entry must appear in source_refs.sources.
 - Transitions must be explicit and explainable in one sentence.
+- Legacy scene envelope consumers must treat `scene_contract_version` as the compatibility key.
 
 **Minimal example**
 ```json

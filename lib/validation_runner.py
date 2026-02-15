@@ -15,7 +15,7 @@ from .storage_utils import normalize_video_id
 VALIDATION_TARGETS = {
     "plan": "planner_output",
     "research": "research_output",
-    "scenes": "scene_output",
+    "scenes": "scene_bundle",
     "script": "script_output",
 }
 
@@ -32,11 +32,15 @@ def validate_files(stage: str, json_paths: Iterable[str]) -> None:
     for path in json_paths:
         if stage == "scenes":
             payload = json.loads(Path(path).read_text(encoding="utf-8"))
-            scenes = payload.get("scenes", [])
-            if not scenes:
-                raise ValueError("Scene output missing 'scenes' array.")
-            for scene in scenes:
-                validate_payload(schema_name, scene)
+            if isinstance(payload, dict) and "scenes" in payload:
+                scenes = payload.get("scenes", [])
+                if not scenes:
+                    raise ValueError("Scene output missing 'scenes' array.")
+                validate_payload(schema_name, payload)
+                for scene in scenes:
+                    validate_payload("scene_output", scene)
+            else:
+                validate_payload("scene_output", payload)
         else:
             validate_json_file(schema_name, path)
 
