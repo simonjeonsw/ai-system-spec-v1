@@ -179,6 +179,24 @@ Schemas define the canonical inputs and outputs for each module.
 }
 ```
 
+
+## Scene Bundle Schema (Legacy Envelope, v1.0)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SceneBundle",
+  "type": "object",
+  "required": ["scenes", "scene_contract_version"],
+  "properties": {
+    "scenes": {"type": "array", "items": {"type": "object"}},
+    "scene_contract_version": {"type": "string"},
+    "scene_engine_version": {"type": "string"},
+    "style_profile": {"type": "string"},
+    "source_script_hash": {"type": "string"}
+  }
+}
+```
+
 ## Script Output Schema (v1.0)
 ```json
 {
