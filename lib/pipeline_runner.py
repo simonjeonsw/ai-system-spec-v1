@@ -41,6 +41,55 @@ from .pipeline_profile import (
 SCENE_ENGINE_VERSION = "2.0"
 SCENE_CONTRACT_VERSION = "legacy_scene_v1"
 
+_CAMERA_ANGLES = [
+    "wide establishing shot",
+    "medium eye-level shot",
+    "close-up detail shot",
+    "over-shoulder analysis shot",
+]
+
+_VISUAL_CUE_KEYWORDS = [
+    ("inflation", "CPI trend chart and household budget pressure visual"),
+    ("interest", "rate decision board and bond yield curve visual"),
+    ("gdp", "macro dashboard with growth and productivity panels"),
+    ("wage", "real wage versus price index comparison chart"),
+    ("policy", "policy timeline board with key decision markers"),
+]
+
+_VISUAL_CUE_VARIANTS = [
+    "with clean infographic overlays",
+    "with cinematic depth and subtle motion",
+    "with high-contrast data callouts",
+    "with minimalist finance newsroom framing",
+]
+
+_VISUAL_CUE_FALLBACKS = [
+    "finance newsroom explainer visual",
+    "data-forward macro analysis board",
+    "clean chart-led storytelling frame",
+]
+
+_CLAIM_TOKEN_STOPWORDS = {
+    "the", "and", "for", "that", "with", "from", "this", "have", "into", "their", "about",
+    "will", "they", "were", "there", "what", "when", "where", "which", "while", "then", "than",
+    "them", "been", "over", "under", "very", "more", "most", "also", "only", "just", "some",
+    "such", "through", "across", "because", "these", "those", "would", "could", "should", "being",
+}
+
+_STAGE_MARKER_PATTERN = re.compile(
+    r"\[(?:HOOK(?:_SEED|_REFINED)?|BEAT(?:_GRAPH)?|VISUAL(?:_BEAT(?:_GRAPH)?)?|SHORTS(?:_INTEL(?:LIGENCE)?)?|RETENTION(?:_EVENTS?)?|STAGE)\]",
+    re.IGNORECASE,
+)
+_PART_MARKER_PATTERN = re.compile(r"---\s*PART\s*\d+\s*:[^-]+---", re.IGNORECASE)
+_SECTION_HEADER_PATTERN = re.compile(r"^\s*(?:#+\s*)?(?:section|chapter|part)\s*\d+\s*[:\-]", re.IGNORECASE)
+_SCENE_BOUNDARY_PATTERN = re.compile(r"\[\s*SCENE\s+(?:START|END)\s*\]", re.IGNORECASE)
+_SCREENPLAY_CUE_PATTERN = re.compile(r"\*{0,2}\[\d{1,2}:\d{2}\]\*{0,2}", re.IGNORECASE)
+_SLUGLINE_PATTERN = re.compile(r"\b(?:INT|EXT)\.[^\n]{0,120}?\b(?:DAY|NIGHT)\b\s*[:\-]*", re.IGNORECASE)
+_DIRECTIVE_PREFIX_PATTERN = re.compile(
+    r"^(opening shot|title card|graph|animation|overlay|host appears|secondary graph|chart|infographic)\s*:",
+    re.IGNORECASE,
+)
+
 
 def resolve_pipeline_profile() -> tuple[str, Dict[str, bool]]:
     resolved_profile, resolved_toggles = resolve_pipeline_profile_from_env()
