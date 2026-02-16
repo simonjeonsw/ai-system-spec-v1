@@ -1,0 +1,14 @@
+{
+  "video_id": "regfull001",
+  "run_id": "run-regfull001",
+  "pipeline_profile": "full_shadow",
+  "shadow_toggles": {
+    "HOOK_SHADOW_ENABLED": true,
+    "BEAT_SHADOW_ENABLED": true,
+    "VISUAL_BEAT_SHADOW_ENABLED": true,
+    "SHORTS_INTEL_SHADOW_ENABLED": true,
+    "RETENTION_EVENTS_ENABLED": true
+  },
+  "selected_hook_stage": "hook_seed",
+  "files": {}
+}

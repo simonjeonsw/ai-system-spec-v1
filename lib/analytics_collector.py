@@ -26,8 +26,13 @@ ANALYTICS_SCOPES = [
 ]
 
 
-def _load_latest_feature_snapshot(video_id: str) -> tuple[Dict[str, Any] | None, str]:
-    """Resolve latest feature snapshot with DB-first strategy, then local fallback."""
+def _load_latest_feature_snapshot(video_id: str) -> tuple[Dict[str, Any] | None, str, str, str | None]:
+    """Resolve latest feature snapshot with DB-first strategy, then local fallback.
+
+    Returns: (payload_or_none, lineage_source, lineage_reason_code, lineage_error_class)
+    lineage_source: db | local | none
+    """
+    db_error_class: str | None = None
     try:
         response = (
             supabase.table("retention_events")
@@ -42,24 +47,28 @@ def _load_latest_feature_snapshot(video_id: str) -> tuple[Dict[str, Any] | None,
         if rows and isinstance(rows[0], dict):
             payload = rows[0].get("payload")
             if isinstance(payload, dict):
-                return payload, "db"
-    except Exception:
-        pass
+                return payload, "db", "db_hit", None
+        db_reason = "db_empty"
+    except Exception as exc:
+        db_reason = "db_query_error"
+        db_error_class = exc.__class__.__name__
 
     data_dir = Path(__file__).resolve().parent.parent / "data"
     path = data_dir / f"{video_id}_retention_events.json"
     payload: Dict[str, Any] = {"events": [], "schema_version": "1.0"}
-    if path.exists():
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            payload = {"events": [], "schema_version": "1.0"}
+    if not path.exists():
+        return None, "none", f"{db_reason}+local_missing", db_error_class
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None, "none", f"{db_reason}+local_parse_error", db_error_class
 
     events = payload.get("events", []) if isinstance(payload, dict) else []
     for event in reversed(events):
         if isinstance(event, dict) and event.get("event_type") == "feature_snapshot":
-            return event, "local"
-    return None, "none"
+            return event, "local", f"{db_reason}+local_hit", db_error_class
+    return None, "none", f"{db_reason}+local_no_feature_snapshot", db_error_class
 
 
 def build_analytics_client() -> Any:
@@ -154,7 +163,7 @@ def append_retention_outcome_event(*, video_id: str, metrics: Dict[str, Any], st
         except Exception:
             payload = {"events": [], "schema_version": "1.0"}
 
-    latest_feature, lineage_source = _load_latest_feature_snapshot(video_id)
+    latest_feature, lineage_source, lineage_reason_code, lineage_error_class = _load_latest_feature_snapshot(video_id)
 
     run_id = str((latest_feature or {}).get("run_id") or f"analytics-{video_id}")
     scene_contract_version = str((latest_feature or {}).get("scene_contract_version") or "legacy_scene_v1")
@@ -185,6 +194,9 @@ def append_retention_outcome_event(*, video_id: str, metrics: Dict[str, Any], st
     )
     event["event_key"] = hashlib.sha256(event_key_seed.encode("utf-8")).hexdigest()
     event["lineage_source"] = lineage_source
+    event["lineage_reason_code"] = lineage_reason_code
+    if lineage_error_class:
+        event["lineage_error_class"] = lineage_error_class
 
     payload.setdefault("events", [])
     payload["events"].append(event)
@@ -237,6 +249,7 @@ def persist_learning_artifacts(*, video_id: str, retention_event: Dict[str, Any]
                 "artifact_version": lineage.get("artifact_version"),
                 "decision": learning_gate.get("decision"),
                 "action": learning_gate.get("action"),
+                "policy_version": learning_gate.get("policy_version", "unknown_legacy"),
                 "policy": learning_gate.get("policy"),
                 "window_size": learning_gate.get("window_size"),
                 "evaluated_outcomes": learning_gate.get("evaluated_outcomes"),
@@ -254,6 +267,7 @@ def persist_learning_artifacts(*, video_id: str, retention_event: Dict[str, Any]
                 "video_id": video_id,
                 "decision": learning_gate.get("decision"),
                 "action": learning_gate.get("action"),
+                "policy_version": learning_gate.get("policy_version", "unknown_legacy"),
                 "policy": learning_gate.get("policy"),
                 "window_size": learning_gate.get("window_size"),
                 "payload": learning_gate,
@@ -314,7 +328,9 @@ def main() -> int:
             )
             output_path = Path(__file__).resolve().parent.parent / "data" / f"analytics_{end_date}.json"
             output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-            output_refs = {"metrics_batch": str(output_path)}
+            lineage_sources = [item.get("retention_event", {}).get("lineage_source") for item in payload.get("results", []) if isinstance(item, dict)]
+            lineage_reason_codes = [item.get("retention_event", {}).get("lineage_reason_code") for item in payload.get("results", []) if isinstance(item, dict)]
+            output_refs = {"metrics_batch": str(output_path), "lineage_sources": lineage_sources, "lineage_reason_codes": lineage_reason_codes}
         else:
             metrics = fetch_video_metrics(
                 video_id=video_id,
@@ -331,7 +347,7 @@ def main() -> int:
             learning_gate = evaluate_learning_gate(video_id=video_id)
             persist_learning_artifacts(video_id=video_id, retention_event=retention_event, learning_gate=learning_gate)
             payload = {"metrics": metrics, "snapshot": snapshot, "retention_event": retention_event, "learning_gate": learning_gate}
-            output_refs = {"metrics": metrics}
+            output_refs = {"metrics": metrics, "lineage_source": retention_event.get("lineage_source"), "lineage_reason_code": retention_event.get("lineage_reason_code")}
         emit_run_log(
             stage="analytics",
             status="success",

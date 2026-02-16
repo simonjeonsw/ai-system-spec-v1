@@ -2,6 +2,7 @@
   "video_id": "d9XXRNC07Ic",
   "decision": "hold",
   "action": "collect_more_data",
+  "policy_version": "v1",
   "policy": {
     "ctr_baseline": 5.0,
     "avd_baseline": 40.0,
@@ -23,7 +24,7 @@
       "artifact_version": "1.0"
     }
   ],
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "lineage": {
     "run_id": "run-d9XXRNC07Ic",
     "artifact_type": "retention_feature_events",

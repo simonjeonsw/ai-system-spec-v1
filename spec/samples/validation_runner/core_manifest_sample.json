@@ -1,0 +1,14 @@
+{
+  "video_id": "regcore001",
+  "run_id": "run-regcore001",
+  "pipeline_profile": "core",
+  "shadow_toggles": {
+    "HOOK_SHADOW_ENABLED": false,
+    "BEAT_SHADOW_ENABLED": false,
+    "VISUAL_BEAT_SHADOW_ENABLED": false,
+    "SHORTS_INTEL_SHADOW_ENABLED": false,
+    "RETENTION_EVENTS_ENABLED": false
+  },
+  "selected_hook_stage": "none",
+  "files": {}
+}

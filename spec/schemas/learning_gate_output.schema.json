@@ -6,6 +6,7 @@
     "video_id",
     "decision",
     "action",
+    "policy_version",
     "policy",
     "window_size",
     "evaluated_outcomes",
@@ -146,6 +147,9 @@
           ]
         }
       }
+    },
+    "policy_version": {
+      "type": "string"
     }
   }
 }
