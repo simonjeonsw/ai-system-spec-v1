@@ -1128,7 +1128,15 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     signal.signal(signal.SIGTERM, _handle_signal)
     try:
         script_updated = False
-        profile_name, profile_toggles = resolve_pipeline_profile()
+        profile_resolution = resolve_pipeline_profile()
+        if isinstance(profile_resolution, tuple) and len(profile_resolution) == 2:
+            profile_name, profile_toggles = profile_resolution
+        elif isinstance(profile_resolution, dict):
+            profile_toggles = profile_resolution
+            requested_profile = (os.getenv(PIPELINE_PROFILE_ENV) or "").strip().lower()
+            profile_name = requested_profile if requested_profile in _PIPELINE_PROFILES else "none"
+        else:
+            raise ValueError(f"Unexpected pipeline profile resolution payload: {type(profile_resolution)!r}")
         print(f"🔧 Pipeline profile resolved: {profile_name} -> {json.dumps(profile_toggles, ensure_ascii=False)}")
         emit_run_log(
             stage="pipeline_profile",
