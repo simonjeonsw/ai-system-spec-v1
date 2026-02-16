@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS public.learning_gates (
   video_id text PRIMARY KEY,
   decision text,
   action text,
+  policy_version text,
   policy jsonb,
   window_size integer,
   payload jsonb NOT NULL,
@@ -57,6 +58,7 @@ CREATE TABLE IF NOT EXISTS public.learning_gates (
 );
 
 ALTER TABLE IF EXISTS public.learning_gates
+  ADD COLUMN IF NOT EXISTS policy_version text,
   ADD COLUMN IF NOT EXISTS policy jsonb,
   ADD COLUMN IF NOT EXISTS window_size integer;
 
@@ -86,6 +88,7 @@ CREATE TABLE IF NOT EXISTS public.learning_gate_decisions (
   artifact_version text,
   decision text,
   action text,
+  policy_version text,
   policy jsonb,
   window_size integer,
   evaluated_outcomes integer,
@@ -95,6 +98,7 @@ CREATE TABLE IF NOT EXISTS public.learning_gate_decisions (
 );
 
 ALTER TABLE IF EXISTS public.learning_gate_decisions
+  ADD COLUMN IF NOT EXISTS policy_version text,
   ADD COLUMN IF NOT EXISTS decision_key text;
 
 CREATE INDEX IF NOT EXISTS idx_learning_gate_decisions_video_created_at

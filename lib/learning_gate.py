@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 
+LEARNING_GATE_POLICY_VERSION = "v1"
+
+
 def _safe_float(value: Any) -> float | None:
     try:
         if value is None:
@@ -88,6 +91,7 @@ def evaluate_learning_gate(
         "video_id": video_id,
         "decision": decision,
         "action": action,
+        "policy_version": LEARNING_GATE_POLICY_VERSION,
         "policy": {
             "ctr_baseline": ctr_baseline,
             "avd_baseline": avd_baseline,
@@ -103,7 +107,7 @@ def evaluate_learning_gate(
             "artifact_type": lineage_source.get("artifact_type"),
             "artifact_version": lineage_source.get("artifact_version"),
         },
-        "schema_version": "1.1",
+        "schema_version": "1.2",
     }
 
     data_dir = Path(__file__).resolve().parent.parent / "data"
