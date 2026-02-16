@@ -9,6 +9,19 @@ from typing import Any, Dict, Optional
 from .supabase_client import supabase
 
 
+_STAGE_LEDGER_DISABLED = False
+_STAGE_LEDGER_DISABLE_REASON = ""
+
+
+def _is_missing_stage_ledger_table(exc: Exception) -> bool:
+    message = str(exc)
+    lowered = message.lower()
+    return (
+        "pgrst205" in lowered
+        and "stage_execution_ledger" in lowered
+    )
+
+
 def build_metrics(
     *,
     latency_ms: int = 0,
@@ -76,6 +89,11 @@ def emit_stage_execution_ledger(
     Uniqueness contract: (video_id, run_id, stage, attempt)
     """
 
+    global _STAGE_LEDGER_DISABLED, _STAGE_LEDGER_DISABLE_REASON
+
+    if _STAGE_LEDGER_DISABLED:
+        return
+
     payload: Dict[str, Any] = {
         "video_id": video_id,
         "run_id": run_id,
@@ -91,4 +109,12 @@ def emit_stage_execution_ledger(
             on_conflict="video_id,run_id,stage,attempt",
         ).execute()
     except Exception as exc:
+        if _is_missing_stage_ledger_table(exc):
+            _STAGE_LEDGER_DISABLED = True
+            _STAGE_LEDGER_DISABLE_REASON = "missing_table"
+            print(
+                "Stage execution ledger disabled: table public.stage_execution_ledger not found (apply sql/2026-02-16_stage_execution_ledger.sql).",
+                file=sys.stderr,
+            )
+            return
         print(f"Stage execution ledger upsert failed: {exc}", file=sys.stderr)

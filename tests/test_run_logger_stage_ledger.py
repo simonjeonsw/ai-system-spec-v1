@@ -39,6 +39,17 @@ class _FakeSupabase:
         return _FakeTable(self, table_name)
 
 
+
+
+class _MissingTableSupabase:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def table(self, _table_name: str):
+        self.calls += 1
+        raise RuntimeError("{'message':'Could not find the table 'public.stage_execution_ledger' in the schema cache','code':'PGRST205'}")
+
+
 class StageExecutionLedgerRunLoggerTests(unittest.TestCase):
     def _load_run_logger(self):
         os.environ.setdefault("SUPABASE_URL", "https://example.supabase.co")
@@ -89,6 +100,39 @@ class StageExecutionLedgerRunLoggerTests(unittest.TestCase):
             )
         finally:
             run_logger.supabase = original
+
+    def test_missing_table_error_disables_future_attempts(self) -> None:
+        run_logger = self._load_run_logger()
+        missing = _MissingTableSupabase()
+        original_supabase = run_logger.supabase
+        original_disabled = run_logger._STAGE_LEDGER_DISABLED
+        original_reason = run_logger._STAGE_LEDGER_DISABLE_REASON
+        run_logger.supabase = missing
+        run_logger._STAGE_LEDGER_DISABLED = False
+        run_logger._STAGE_LEDGER_DISABLE_REASON = ""
+        try:
+            run_logger.emit_stage_execution_ledger(
+                video_id="vid001",
+                run_id="run001",
+                stage="research",
+                attempt=1,
+                status="success",
+            )
+            self.assertTrue(run_logger._STAGE_LEDGER_DISABLED)
+            self.assertEqual(run_logger._STAGE_LEDGER_DISABLE_REASON, "missing_table")
+            first_calls = missing.calls
+            run_logger.emit_stage_execution_ledger(
+                video_id="vid001",
+                run_id="run001",
+                stage="research",
+                attempt=2,
+                status="success",
+            )
+            self.assertEqual(missing.calls, first_calls)
+        finally:
+            run_logger.supabase = original_supabase
+            run_logger._STAGE_LEDGER_DISABLED = original_disabled
+            run_logger._STAGE_LEDGER_DISABLE_REASON = original_reason
 
 
 if __name__ == "__main__":
