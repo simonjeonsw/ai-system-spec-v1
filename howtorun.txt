@@ -76,3 +76,8 @@ psql "$SUPABASE_DB_URL" -c "\d+ public.video_uploads"
 Verify unique indexes
 psql "$SUPABASE_DB_URL" -c "\d+ public.retention_events" | rg "uniq_retention_events_event_key"
 psql "$SUPABASE_DB_URL" -c "\d+ public.learning_gate_decisions" | rg "uniq_learning_gate_decisions_decision_key"
+
+
+Profile-aware validation regression check
+python -m unittest tests.test_validation_runner_profile -v
+python -m unittest tests.test_pipeline_profile_contract -v

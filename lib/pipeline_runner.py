@@ -64,83 +64,20 @@ _PIPELINE_PROFILES = {
 }
 
 
-def _env_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def resolve_pipeline_profile() -> tuple[str, Dict[str, bool]]:
-    requested = (os.getenv(PIPELINE_PROFILE_ENV, "core") or "core").strip().lower()
-    if requested not in _PIPELINE_PROFILES:
-        requested = "core"
-    resolved = {
-        key: _env_bool(key, default=value)
-        for key, value in _PIPELINE_PROFILES[requested].items()
-    }
-    return requested, resolved
-
-_CAMERA_ANGLES = [
-    "wide shot of a bank vault",
-    "close-up of a coin",
-    "isometric top-down financial dashboard view",
-    "over-the-shoulder view of a ledger",
-    "medium shot of host with infographic wall",
-    "macro shot of currency notes and calculator",
-]
-_STAGE_MARKER_PATTERN = re.compile(r"\[(?:scene|visual|narration)\s*:[^\]]*\]|\[(?:scene|visual|narration)\]", re.IGNORECASE)
-_PART_MARKER_PATTERN = re.compile(r"---\s*PART\s*\d+\s*:[^-]+---", re.IGNORECASE)
-_SECTION_HEADER_PATTERN = re.compile(r"---\s*CONCLUSION\s*---", re.IGNORECASE)
-_DIRECTIVE_PREFIX_PATTERN = re.compile(r"^(opening shot|title card|graph|animation|overlay|host appears|secondary graph|chart|infographic)\s*:", re.IGNORECASE)
-_SCREENPLAY_CUE_PATTERN = re.compile(r"\*{0,2}\[\d{1,2}:\d{2}\]\*{0,2}", re.IGNORECASE)
-_SCENE_BOUNDARY_PATTERN = re.compile(r"\[\s*SCENE\s+(?:START|END)\s*\]", re.IGNORECASE)
-_SLUGLINE_PATTERN = re.compile(r"\b(?:INT|EXT)\.[^\n]{0,120}?\b(?:DAY|NIGHT)\b\s*[:\-]*", re.IGNORECASE)
-_CLAIM_TOKEN_STOPWORDS = {
-    "that",
-    "with",
-    "this",
-    "from",
-    "into",
-    "about",
-    "there",
-    "their",
-    "have",
-    "were",
-    "been",
-    "while",
-    "which",
-}
-_VISUAL_CUE_KEYWORDS = [
-    ("inflation", "Animated purchasing-power erosion chart with shrinking currency icons."),
-    ("tax", "Policy dashboard showing tax flow and household net-income impact."),
-    ("wage", "Split graph comparing wage trend vs cost-of-living trajectory."),
-    ("productivity", "Diverging line chart: productivity growth vs worker compensation."),
-    ("debt", "Household debt stack visualization with interest snowball effect."),
-    ("regulation", "Regulatory flowchart showing compliance friction on small businesses."),
-    ("policy", "Government policy lever infographic tied to household outcomes."),
-]
-_VISUAL_CUE_FALLBACKS = [
-    "Host-led explainer shot with contextual economic infographic wall.",
-    "Top-down dashboard montage of cashflow, savings, and spending metrics.",
-    "Clean whiteboard-style chart sequence highlighting cause-and-effect economics.",
-    "Isometric city economy map illustrating households, firms, and policy channels.",
-]
-_VISUAL_CUE_VARIANTS = [
-    "Use icon-driven composition with concise labels.",
-    "Use split-screen comparison with directional arrows.",
-    "Use chart-led composition with callout annotations.",
-    "Use storyboard sequence showing cause → effect → takeaway.",
-]
+_TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
 
 
 def _parse_bool_env(value: str | None) -> bool:
     return (value or "").strip().lower() in _TRUTHY_ENV_VALUES
 
 
-def resolve_pipeline_profile() -> Dict[str, bool]:
-    profile_name = (os.getenv(PIPELINE_PROFILE_ENV) or "").strip().lower()
-    profile_defaults = _PIPELINE_PROFILES.get(profile_name, {})
+def resolve_pipeline_profile() -> tuple[str, Dict[str, bool]]:
+    """Resolve active profile and shadow toggles deterministically.
+
+    Precedence: explicit env override > profile default > hardcoded false.
+    """
+    requested_profile = (os.getenv(PIPELINE_PROFILE_ENV) or "").strip().lower()
+    profile_defaults = _PIPELINE_PROFILES.get(requested_profile, {})
     resolved_toggles: Dict[str, bool] = {}
     toggle_env_names = (
         HOOK_SHADOW_ENABLED_ENV,
@@ -156,11 +93,11 @@ def resolve_pipeline_profile() -> Dict[str, bool]:
             resolved_toggles[toggle_name] = _parse_bool_env(explicit_env_value)
             continue
         if toggle_name in profile_defaults:
-            resolved_toggles[toggle_name] = profile_defaults[toggle_name]
+            resolved_toggles[toggle_name] = bool(profile_defaults[toggle_name])
             continue
         resolved_toggles[toggle_name] = False
 
-    resolved_profile = profile_name if profile_name in _PIPELINE_PROFILES else "none"
+    resolved_profile = requested_profile if requested_profile in _PIPELINE_PROFILES else "none"
     print(
         "[pipeline_profile] "
         f"profile={resolved_profile} "
@@ -170,8 +107,7 @@ def resolve_pipeline_profile() -> Dict[str, bool]:
         f"{SHORTS_INTEL_SHADOW_ENABLED_ENV}={resolved_toggles[SHORTS_INTEL_SHADOW_ENABLED_ENV]} "
         f"{RETENTION_EVENTS_ENABLED_ENV}={resolved_toggles[RETENTION_EVENTS_ENABLED_ENV]}"
     )
-    return resolved_toggles
-
+    return resolved_profile, resolved_toggles
 
 
 def _parse_payload(text: str) -> Dict[str, Any]:
