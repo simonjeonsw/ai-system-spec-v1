@@ -11,8 +11,8 @@
   - `hook_seed_path`
   - `hook_refined_path`
 - `retention_events` table (append-only event store, idempotent via `event_key`)
-- `learning_gates` table (latest decision per `video_id`)
-- `learning_gate_decisions` table (append-only decision history, idempotent via `decision_key`)
+- `learning_gates` table (latest decision per `video_id`, includes `policy_version`)
+- `learning_gate_decisions` table (append-only decision history, idempotent via `decision_key`, includes `policy_version`)
 
 ## Apply commands
 
@@ -37,8 +37,8 @@ psql "$SUPABASE_DB_URL" -c "\d+ public.video_uploads"
 ## Runtime note
 `lib/analytics_collector.py` now attempts to persist:
 - outcome snapshot events into `public.retention_events`
-- learning gate outputs into `public.learning_gates` (latest status)
-- learning gate decision history into `public.learning_gate_decisions` (append-only)
+- learning gate outputs into `public.learning_gates` (latest status + `policy_version`)
+- learning gate decision history into `public.learning_gate_decisions` (append-only + `policy_version`)
 
 If tables are not present, collector continues non-blocking and prints warning lines.
 
@@ -51,3 +51,4 @@ If tables are not present, collector continues non-blocking and prints warning l
 ## Distributed lineage note
 - Analytics outcome generation resolves `feature_snapshot` with DB-first lookup and local fallback.
 - Local artifacts include `lineage_source` (`db|local|none`) for auditability.
+- Outcome artifacts include `lineage_reason_code` (e.g., `db_hit`, `db_query_error+local_hit`) for deterministic fallback diagnostics.

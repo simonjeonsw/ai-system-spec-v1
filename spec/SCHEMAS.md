@@ -101,18 +101,20 @@ Schemas define the canonical inputs and outputs for each module.
 
 - Event items now require full retention event keys (`run_id`, `artifact_type`, `artifact_version`, `event_key`, etc.).
 
-## Learning Gate Output Schema (v1.1)
+## Learning Gate Output Schema (v1.2)
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "LearningGateOutput",
   "type": "object",
   "required": [
-    "video_id", "decision", "action", "policy", "window_size",
+    "video_id", "decision", "action", "policy_version", "policy", "window_size",
     "evaluated_outcomes", "signals", "lineage", "schema_version"
   ]
 }
 ```
+
+- `policy_version` tracks which learning gate policy produced the decision.
 
 ## Planner Output Schema (v1.0)
 ```json
