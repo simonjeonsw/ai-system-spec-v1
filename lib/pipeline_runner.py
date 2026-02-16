@@ -28,76 +28,22 @@ from .hook_layer import generate_hook_seed, generate_hook_refined
 from .beat_shadow import generate_beat_graph_shadow, generate_visual_beat_graph_shadow
 from .shorts_intel import generate_shorts_intelligence_shadow
 from .retention_events import build_feature_snapshot_event
+from .pipeline_profile import (
+    BEAT_SHADOW_ENABLED_ENV,
+    HOOK_SHADOW_ENABLED_ENV,
+    RETENTION_EVENTS_ENABLED_ENV,
+    SHORTS_INTEL_SHADOW_ENABLED_ENV,
+    VISUAL_BEAT_SHADOW_ENABLED_ENV,
+    resolve_pipeline_profile_from_env,
+)
 
 
 SCENE_ENGINE_VERSION = "2.0"
 SCENE_CONTRACT_VERSION = "legacy_scene_v1"
-HOOK_SHADOW_ENABLED_ENV = "HOOK_SHADOW_ENABLED"
-BEAT_SHADOW_ENABLED_ENV = "BEAT_SHADOW_ENABLED"
-VISUAL_BEAT_SHADOW_ENABLED_ENV = "VISUAL_BEAT_SHADOW_ENABLED"
-SHORTS_INTEL_SHADOW_ENABLED_ENV = "SHORTS_INTEL_SHADOW_ENABLED"
-RETENTION_EVENTS_ENABLED_ENV = "RETENTION_EVENTS_ENABLED"
-PIPELINE_PROFILE_ENV = "PIPELINE_PROFILE"
-
-_PIPELINE_PROFILES = {
-    "core": {
-        HOOK_SHADOW_ENABLED_ENV: False,
-        BEAT_SHADOW_ENABLED_ENV: False,
-        VISUAL_BEAT_SHADOW_ENABLED_ENV: False,
-        SHORTS_INTEL_SHADOW_ENABLED_ENV: False,
-        RETENTION_EVENTS_ENABLED_ENV: False,
-    },
-    "shadow": {
-        HOOK_SHADOW_ENABLED_ENV: True,
-        BEAT_SHADOW_ENABLED_ENV: True,
-        VISUAL_BEAT_SHADOW_ENABLED_ENV: True,
-        SHORTS_INTEL_SHADOW_ENABLED_ENV: True,
-        RETENTION_EVENTS_ENABLED_ENV: False,
-    },
-    "full_shadow": {
-        HOOK_SHADOW_ENABLED_ENV: True,
-        BEAT_SHADOW_ENABLED_ENV: True,
-        VISUAL_BEAT_SHADOW_ENABLED_ENV: True,
-        SHORTS_INTEL_SHADOW_ENABLED_ENV: True,
-        RETENTION_EVENTS_ENABLED_ENV: True,
-    },
-}
-
-
-_TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
-
-
-def _parse_bool_env(value: str | None) -> bool:
-    return (value or "").strip().lower() in _TRUTHY_ENV_VALUES
 
 
 def resolve_pipeline_profile() -> tuple[str, Dict[str, bool]]:
-    """Resolve active profile and shadow toggles deterministically.
-
-    Precedence: explicit env override > profile default > hardcoded false.
-    """
-    requested_profile = (os.getenv(PIPELINE_PROFILE_ENV) or "").strip().lower()
-    profile_defaults = _PIPELINE_PROFILES.get(requested_profile, {})
-    resolved_toggles: Dict[str, bool] = {}
-    toggle_env_names = (
-        HOOK_SHADOW_ENABLED_ENV,
-        BEAT_SHADOW_ENABLED_ENV,
-        VISUAL_BEAT_SHADOW_ENABLED_ENV,
-        SHORTS_INTEL_SHADOW_ENABLED_ENV,
-        RETENTION_EVENTS_ENABLED_ENV,
-    )
-
-    for toggle_name in toggle_env_names:
-        explicit_env_value = os.getenv(toggle_name)
-        if explicit_env_value is not None:
-            resolved_toggles[toggle_name] = _parse_bool_env(explicit_env_value)
-            continue
-        if toggle_name in profile_defaults:
-            resolved_toggles[toggle_name] = bool(profile_defaults[toggle_name])
-            continue
-        resolved_toggles[toggle_name] = False
-
-    resolved_profile = requested_profile if requested_profile in _PIPELINE_PROFILES else "none"
+    resolved_profile, resolved_toggles = resolve_pipeline_profile_from_env()
     print(
         "[pipeline_profile] "
         f"profile={resolved_profile} "
@@ -1128,15 +1074,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     signal.signal(signal.SIGTERM, _handle_signal)
     try:
         script_updated = False
-        profile_resolution = resolve_pipeline_profile()
-        if isinstance(profile_resolution, tuple) and len(profile_resolution) == 2:
-            profile_name, profile_toggles = profile_resolution
-        elif isinstance(profile_resolution, dict):
-            profile_toggles = profile_resolution
-            requested_profile = (os.getenv(PIPELINE_PROFILE_ENV) or "").strip().lower()
-            profile_name = requested_profile if requested_profile in _PIPELINE_PROFILES else "none"
-        else:
-            raise ValueError(f"Unexpected pipeline profile resolution payload: {type(profile_resolution)!r}")
+        profile_name, profile_toggles = resolve_pipeline_profile()
         print(f"🔧 Pipeline profile resolved: {profile_name} -> {json.dumps(profile_toggles, ensure_ascii=False)}")
         emit_run_log(
             stage="pipeline_profile",
