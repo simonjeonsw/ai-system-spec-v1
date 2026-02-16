@@ -47,6 +47,19 @@ class PipelineRunnerStageArtifactRegression(unittest.TestCase):
         self.assertIn("Intro.", cleaned)
         self.assertIn("Data point.", cleaned)
 
+    def test_stage_marker_token_vocabulary_is_stripped(self) -> None:
+        probe = (
+            "import json; "
+            "from lib.pipeline_runner import STAGE_MARKER_TOKENS, _strip_stage_artifacts; "
+            "text=' '.join(f'[{token}] marker' for token in STAGE_MARKER_TOKENS); "
+            "cleaned=_strip_stage_artifacts(text); "
+            "print(json.dumps({'cleaned':cleaned, 'tokens':list(STAGE_MARKER_TOKENS)}))"
+        )
+        payload = self._run_probe(probe)
+        cleaned = str(payload["cleaned"])
+        for token in payload["tokens"]:
+            self.assertNotIn(f"[{token}]", cleaned)
+
     def test_split_text_into_beats_handles_stage_markers(self) -> None:
         probe = (
             "import json; "

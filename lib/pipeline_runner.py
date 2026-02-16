@@ -17,7 +17,7 @@ from .metadata_generator import generate_metadata
 from .planner import ContentPlanner
 from .researcher import VideoResearcher
 from .scripter import ContentScripter
-from .run_logger import build_metrics, emit_run_log
+from .run_logger import build_metrics, emit_run_log, emit_stage_execution_ledger
 from .storage_utils import normalize_video_id, save_json, load_json, ensure_data_dir, save_markdown
 from .supabase_client import supabase
 from .schema_validator import validate_payload
@@ -76,8 +76,22 @@ _CLAIM_TOKEN_STOPWORDS = {
     "such", "through", "across", "because", "these", "those", "would", "could", "should", "being",
 }
 
+STAGE_MARKER_TOKENS = (
+    "HOOK",
+    "HOOK_SEED",
+    "HOOK_REFINED",
+    "BEAT",
+    "BEAT_GRAPH",
+    "VISUAL_BEAT",
+    "VISUAL_BEAT_GRAPH",
+    "SHORTS_INTEL",
+    "SHORTS_INTELLIGENCE",
+    "RETENTION_EVENT",
+    "RETENTION_EVENTS",
+    "STAGE",
+)
 _STAGE_MARKER_PATTERN = re.compile(
-    r"\[(?:HOOK(?:_SEED|_REFINED)?|BEAT(?:_GRAPH)?|VISUAL(?:_BEAT(?:_GRAPH)?)?|SHORTS(?:_INTEL(?:LIGENCE)?)?|RETENTION(?:_EVENTS?)?|STAGE)\]",
+    r"\[(?:" + "|".join(re.escape(token) for token in STAGE_MARKER_TOKENS) + r")\]",
     re.IGNORECASE,
 )
 _PART_MARKER_PATTERN = re.compile(r"---\s*PART\s*\d+\s*:[^-]+---", re.IGNORECASE)
@@ -960,6 +974,7 @@ def _log_run_id(root_run_id: str, stage: str, attempt: int) -> str:
 
 def _run_stage(
     *,
+    video_id: str,
     stage: str,
     run_id: str,
     input_refs: Dict[str, Any],
@@ -986,6 +1001,14 @@ def _run_stage(
                 attempts=attempt,
                 run_id=_log_run_id(run_id, stage, attempt),
             )
+            emit_stage_execution_ledger(
+                video_id=video_id,
+                run_id=run_id,
+                stage=stage,
+                attempt=attempt,
+                status="success",
+                metadata={"latency_ms": latency_ms, "input_refs": input_refs},
+            )
             return result, attempt
         except Exception as exc:
             last_error = exc
@@ -1002,6 +1025,15 @@ def _run_stage(
                 ),
                 attempts=attempt,
                 run_id=_log_run_id(run_id, stage, attempt),
+            )
+            emit_stage_execution_ledger(
+                video_id=video_id,
+                run_id=run_id,
+                stage=stage,
+                attempt=attempt,
+                status="failure",
+                error_summary=str(exc),
+                metadata={"latency_ms": latency_ms, "input_refs": input_refs},
             )
             if not _is_transient_error(exc) or attempt >= max_retries:
                 break
@@ -1175,6 +1207,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             save_markdown("research", video_id, _render_research_markdown(research_payload))
         else:
             research_text, _ = _run_stage(
+                video_id=video_id,
                 stage="research",
                 run_id=run_id,
                 input_refs={"video_id": video_id, "refresh": refresh},
@@ -1192,6 +1225,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             save_markdown("plan", video_id, _render_plan_markdown(plan_payload))
         else:
             plan_result, _ = _run_stage(
+                video_id=video_id,
                 stage="planner",
                 run_id=run_id,
                 input_refs={"video_id": video_id},
@@ -1216,6 +1250,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             script_payload = cached_script
         else:
             script_text, _ = _run_stage(
+                video_id=video_id,
                 stage="script",
                 run_id=run_id,
                 input_refs={"video_id": video_id},
@@ -1253,6 +1288,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             shorts_payload = cached_shorts
         else:
             shorts_text, _ = _run_stage(
+                video_id=video_id,
                 stage="script_shorts",
                 run_id=run_id,
                 input_refs={"video_id": video_id},
@@ -1431,6 +1467,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
         if verification_result.status != "pass":
             feedback = "; ".join(verification_result.errors)
             script_text, _ = _run_stage(
+                video_id=video_id,
                 stage="script_repair",
                 run_id=run_id,
                 input_refs={"video_id": video_id, "retry": "validator_feedback"},
@@ -1524,6 +1561,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             metadata_payload = cached_metadata
         else:
             metadata_payload, _ = _run_stage(
+                video_id=video_id,
                 stage="metadata",
                 run_id=run_id,
                 input_refs={"video_id": video_id},
