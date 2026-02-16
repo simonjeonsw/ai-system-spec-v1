@@ -80,3 +80,4 @@ psql "$SUPABASE_DB_URL" -c "\d+ public.learning_gate_decisions" | rg "uniq_learn
 
 Profile-aware validation regression check
 python -m unittest tests.test_validation_runner_profile -v
+python -m unittest tests.test_pipeline_profile_contract -v
