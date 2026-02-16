@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Set
 
 
 _SOURCE_ID_PATTERN = re.compile(r"src-\d+", re.IGNORECASE)
-_WORD_PATTERN = re.compile(r"[A-Za-z][A-Za-z\-']+")
+_WORD_PATTERN = re.compile(r"[A-Za-z가-힣][A-Za-z가-힣\-']+")
 _STAGE_TAG_PATTERN = re.compile(r"\[(?:visual|narration|scene)\s*:[^\]]*\]|\[(?:visual|narration|scene)\]", re.IGNORECASE)
 _PART_MARKER_PATTERN = re.compile(r"---\s*PART\s*\d+\s*:[^-]+---", re.IGNORECASE)
 _STRUCTURAL_ONLY_PATTERN = re.compile(r"^(?:\*+|\d+\.|\[src-\d+\]|[-–—\s]+)$", re.IGNORECASE)
@@ -219,6 +219,11 @@ def _top_keywords(text: str, limit: int = 25) -> Set[str]:
     return {token for token, _ in counts.most_common(limit)}
 
 
+def _keyword_overlap_signal_reliable(research_keywords: Set[str], script_keywords: Set[str]) -> bool:
+    # Avoid false CRITICAL on sparse or language-mismatched token extraction.
+    return len(research_keywords) >= 5 and len(script_keywords) >= 5
+
+
 def _script_semantic_corpus(script_payload: Dict[str, Any]) -> str:
     script = script_payload.get("script", "")
     if isinstance(script, dict):
@@ -267,7 +272,7 @@ class ScriptValidator:
             errors.append("CRITICAL: Topic alignment failure. Finance anchors missing in script.")
         if finance_in_research and neuro_in_script and len(overlap) < 3:
             errors.append("CRITICAL: Topic mismatch detected (research=finance, script=non-finance domain).")
-        if len(overlap) < 3:
+        if _keyword_overlap_signal_reliable(research_keywords, script_keywords) and len(overlap) < 3:
             errors.append(
                 "CRITICAL: Semantic overlap too low between research and script keywords "
                 f"(overlap={len(overlap)})."

@@ -17,7 +17,7 @@ from .metadata_generator import generate_metadata
 from .planner import ContentPlanner
 from .researcher import VideoResearcher
 from .scripter import ContentScripter
-from .run_logger import build_metrics, emit_run_log
+from .run_logger import build_metrics, emit_run_log, emit_stage_execution_ledger
 from .storage_utils import normalize_video_id, save_json, load_json, ensure_data_dir, save_markdown
 from .supabase_client import supabase
 from .schema_validator import validate_payload
@@ -28,76 +28,85 @@ from .hook_layer import generate_hook_seed, generate_hook_refined
 from .beat_shadow import generate_beat_graph_shadow, generate_visual_beat_graph_shadow
 from .shorts_intel import generate_shorts_intelligence_shadow
 from .retention_events import build_feature_snapshot_event
+from .pipeline_profile import (
+    BEAT_SHADOW_ENABLED_ENV,
+    HOOK_SHADOW_ENABLED_ENV,
+    RETENTION_EVENTS_ENABLED_ENV,
+    SHORTS_INTEL_SHADOW_ENABLED_ENV,
+    VISUAL_BEAT_SHADOW_ENABLED_ENV,
+    resolve_pipeline_profile_from_env,
+)
 
 
 SCENE_ENGINE_VERSION = "2.0"
 SCENE_CONTRACT_VERSION = "legacy_scene_v1"
-HOOK_SHADOW_ENABLED_ENV = "HOOK_SHADOW_ENABLED"
-BEAT_SHADOW_ENABLED_ENV = "BEAT_SHADOW_ENABLED"
-VISUAL_BEAT_SHADOW_ENABLED_ENV = "VISUAL_BEAT_SHADOW_ENABLED"
-SHORTS_INTEL_SHADOW_ENABLED_ENV = "SHORTS_INTEL_SHADOW_ENABLED"
-RETENTION_EVENTS_ENABLED_ENV = "RETENTION_EVENTS_ENABLED"
-PIPELINE_PROFILE_ENV = "PIPELINE_PROFILE"
 
-_PIPELINE_PROFILES = {
-    "core": {
-        HOOK_SHADOW_ENABLED_ENV: False,
-        BEAT_SHADOW_ENABLED_ENV: False,
-        VISUAL_BEAT_SHADOW_ENABLED_ENV: False,
-        SHORTS_INTEL_SHADOW_ENABLED_ENV: False,
-        RETENTION_EVENTS_ENABLED_ENV: False,
-    },
-    "shadow": {
-        HOOK_SHADOW_ENABLED_ENV: True,
-        BEAT_SHADOW_ENABLED_ENV: True,
-        VISUAL_BEAT_SHADOW_ENABLED_ENV: True,
-        SHORTS_INTEL_SHADOW_ENABLED_ENV: True,
-        RETENTION_EVENTS_ENABLED_ENV: False,
-    },
-    "full_shadow": {
-        HOOK_SHADOW_ENABLED_ENV: True,
-        BEAT_SHADOW_ENABLED_ENV: True,
-        VISUAL_BEAT_SHADOW_ENABLED_ENV: True,
-        SHORTS_INTEL_SHADOW_ENABLED_ENV: True,
-        RETENTION_EVENTS_ENABLED_ENV: True,
-    },
+_CAMERA_ANGLES = [
+    "wide establishing shot",
+    "medium eye-level shot",
+    "close-up detail shot",
+    "over-shoulder analysis shot",
+]
+
+_VISUAL_CUE_KEYWORDS = [
+    ("inflation", "CPI trend chart and household budget pressure visual"),
+    ("interest", "rate decision board and bond yield curve visual"),
+    ("gdp", "macro dashboard with growth and productivity panels"),
+    ("wage", "real wage versus price index comparison chart"),
+    ("policy", "policy timeline board with key decision markers"),
+]
+
+_VISUAL_CUE_VARIANTS = [
+    "with clean infographic overlays",
+    "with cinematic depth and subtle motion",
+    "with high-contrast data callouts",
+    "with minimalist finance newsroom framing",
+]
+
+_VISUAL_CUE_FALLBACKS = [
+    "finance newsroom explainer visual",
+    "data-forward macro analysis board",
+    "clean chart-led storytelling frame",
+]
+
+_CLAIM_TOKEN_STOPWORDS = {
+    "the", "and", "for", "that", "with", "from", "this", "have", "into", "their", "about",
+    "will", "they", "were", "there", "what", "when", "where", "which", "while", "then", "than",
+    "them", "been", "over", "under", "very", "more", "most", "also", "only", "just", "some",
+    "such", "through", "across", "because", "these", "those", "would", "could", "should", "being",
 }
 
-
-_TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
-
-
-def _parse_bool_env(value: str | None) -> bool:
-    return (value or "").strip().lower() in _TRUTHY_ENV_VALUES
+STAGE_MARKER_TOKENS = (
+    "HOOK",
+    "HOOK_SEED",
+    "HOOK_REFINED",
+    "BEAT",
+    "BEAT_GRAPH",
+    "VISUAL_BEAT",
+    "VISUAL_BEAT_GRAPH",
+    "SHORTS_INTEL",
+    "SHORTS_INTELLIGENCE",
+    "RETENTION_EVENT",
+    "RETENTION_EVENTS",
+    "STAGE",
+)
+_STAGE_MARKER_PATTERN = re.compile(
+    r"\[(?:" + "|".join(re.escape(token) for token in STAGE_MARKER_TOKENS) + r")\]",
+    re.IGNORECASE,
+)
+_PART_MARKER_PATTERN = re.compile(r"---\s*PART\s*\d+\s*:[^-]+---", re.IGNORECASE)
+_SECTION_HEADER_PATTERN = re.compile(r"^\s*(?:#+\s*)?(?:section|chapter|part)\s*\d+\s*[:\-]", re.IGNORECASE)
+_SCENE_BOUNDARY_PATTERN = re.compile(r"\[\s*SCENE\s+(?:START|END)\s*\]", re.IGNORECASE)
+_SCREENPLAY_CUE_PATTERN = re.compile(r"\*{0,2}\[\d{1,2}:\d{2}\]\*{0,2}", re.IGNORECASE)
+_SLUGLINE_PATTERN = re.compile(r"\b(?:INT|EXT)\.[^\n]{0,120}?\b(?:DAY|NIGHT)\b\s*[:\-]*", re.IGNORECASE)
+_DIRECTIVE_PREFIX_PATTERN = re.compile(
+    r"^(opening shot|title card|graph|animation|overlay|host appears|secondary graph|chart|infographic)\s*:",
+    re.IGNORECASE,
+)
 
 
 def resolve_pipeline_profile() -> tuple[str, Dict[str, bool]]:
-    """Resolve active profile and shadow toggles deterministically.
-
-    Precedence: explicit env override > profile default > hardcoded false.
-    """
-    requested_profile = (os.getenv(PIPELINE_PROFILE_ENV) or "").strip().lower()
-    profile_defaults = _PIPELINE_PROFILES.get(requested_profile, {})
-    resolved_toggles: Dict[str, bool] = {}
-    toggle_env_names = (
-        HOOK_SHADOW_ENABLED_ENV,
-        BEAT_SHADOW_ENABLED_ENV,
-        VISUAL_BEAT_SHADOW_ENABLED_ENV,
-        SHORTS_INTEL_SHADOW_ENABLED_ENV,
-        RETENTION_EVENTS_ENABLED_ENV,
-    )
-
-    for toggle_name in toggle_env_names:
-        explicit_env_value = os.getenv(toggle_name)
-        if explicit_env_value is not None:
-            resolved_toggles[toggle_name] = _parse_bool_env(explicit_env_value)
-            continue
-        if toggle_name in profile_defaults:
-            resolved_toggles[toggle_name] = bool(profile_defaults[toggle_name])
-            continue
-        resolved_toggles[toggle_name] = False
-
-    resolved_profile = requested_profile if requested_profile in _PIPELINE_PROFILES else "none"
+    resolved_profile, resolved_toggles = resolve_pipeline_profile_from_env()
     print(
         "[pipeline_profile] "
         f"profile={resolved_profile} "
@@ -965,6 +974,7 @@ def _log_run_id(root_run_id: str, stage: str, attempt: int) -> str:
 
 def _run_stage(
     *,
+    video_id: str,
     stage: str,
     run_id: str,
     input_refs: Dict[str, Any],
@@ -991,6 +1001,14 @@ def _run_stage(
                 attempts=attempt,
                 run_id=_log_run_id(run_id, stage, attempt),
             )
+            emit_stage_execution_ledger(
+                video_id=video_id,
+                run_id=run_id,
+                stage=stage,
+                attempt=attempt,
+                status="success",
+                metadata={"latency_ms": latency_ms, "input_refs": input_refs},
+            )
             return result, attempt
         except Exception as exc:
             last_error = exc
@@ -1007,6 +1025,15 @@ def _run_stage(
                 ),
                 attempts=attempt,
                 run_id=_log_run_id(run_id, stage, attempt),
+            )
+            emit_stage_execution_ledger(
+                video_id=video_id,
+                run_id=run_id,
+                stage=stage,
+                attempt=attempt,
+                status="failure",
+                error_summary=str(exc),
+                metadata={"latency_ms": latency_ms, "input_refs": input_refs},
             )
             if not _is_transient_error(exc) or attempt >= max_retries:
                 break
@@ -1128,15 +1155,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
     signal.signal(signal.SIGTERM, _handle_signal)
     try:
         script_updated = False
-        profile_resolution = resolve_pipeline_profile()
-        if isinstance(profile_resolution, tuple) and len(profile_resolution) == 2:
-            profile_name, profile_toggles = profile_resolution
-        elif isinstance(profile_resolution, dict):
-            profile_toggles = profile_resolution
-            requested_profile = (os.getenv(PIPELINE_PROFILE_ENV) or "").strip().lower()
-            profile_name = requested_profile if requested_profile in _PIPELINE_PROFILES else "none"
-        else:
-            raise ValueError(f"Unexpected pipeline profile resolution payload: {type(profile_resolution)!r}")
+        profile_name, profile_toggles = resolve_pipeline_profile()
         print(f"🔧 Pipeline profile resolved: {profile_name} -> {json.dumps(profile_toggles, ensure_ascii=False)}")
         emit_run_log(
             stage="pipeline_profile",
@@ -1188,6 +1207,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             save_markdown("research", video_id, _render_research_markdown(research_payload))
         else:
             research_text, _ = _run_stage(
+                video_id=video_id,
                 stage="research",
                 run_id=run_id,
                 input_refs={"video_id": video_id, "refresh": refresh},
@@ -1205,6 +1225,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             save_markdown("plan", video_id, _render_plan_markdown(plan_payload))
         else:
             plan_result, _ = _run_stage(
+                video_id=video_id,
                 stage="planner",
                 run_id=run_id,
                 input_refs={"video_id": video_id},
@@ -1229,6 +1250,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             script_payload = cached_script
         else:
             script_text, _ = _run_stage(
+                video_id=video_id,
                 stage="script",
                 run_id=run_id,
                 input_refs={"video_id": video_id},
@@ -1266,6 +1288,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             shorts_payload = cached_shorts
         else:
             shorts_text, _ = _run_stage(
+                video_id=video_id,
                 stage="script_shorts",
                 run_id=run_id,
                 input_refs={"video_id": video_id},
@@ -1444,6 +1467,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
         if verification_result.status != "pass":
             feedback = "; ".join(verification_result.errors)
             script_text, _ = _run_stage(
+                video_id=video_id,
                 stage="script_repair",
                 run_id=run_id,
                 input_refs={"video_id": video_id, "retry": "validator_feedback"},
@@ -1537,6 +1561,7 @@ def run_pipeline(video_input: str, refresh: bool = False) -> Dict[str, Any]:
             metadata_payload = cached_metadata
         else:
             metadata_payload, _ = _run_stage(
+                video_id=video_id,
                 stage="metadata",
                 run_id=run_id,
                 input_refs={"video_id": video_id},
