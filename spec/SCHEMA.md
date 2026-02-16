@@ -58,6 +58,25 @@ Stores structured run logs for pipeline execution and observability.
 | metrics       | jsonb       | Per-stage metrics (latency, tokens, cost, cache_hit)    |
 | created_at    | timestamptz | default now()                                          |
 
+## stage_execution_ledger
+
+Stores deterministic stage execution checkpoints keyed by stage attempt.
+
+| Column        | Type        | Notes                                                              |
+|---------------|-------------|--------------------------------------------------------------------|
+| id            | bigint      | PK, generated identity                                             |
+| video_id      | text        | Stable video identifier                                            |
+| run_id        | text        | Root pipeline run identifier                                       |
+| stage         | text        | Stage name (research/planner/script/metadata/etc.)                |
+| attempt       | int         | Attempt number for this stage                                      |
+| status        | text        | success / failure / skipped / warning                             |
+| error_summary | text        | Optional short failure summary                                     |
+| metadata      | jsonb       | Attempt metadata (latency, input refs, diagnostics)               |
+| created_at    | timestamptz | default now()                                                      |
+| updated_at    | timestamptz | default now(), touched on update                                  |
+
+**Uniqueness contract:** `(video_id, run_id, stage, attempt)`.
+
 ## metadata_experiments
 
 Stores A/B testing results for titles and thumbnails.
